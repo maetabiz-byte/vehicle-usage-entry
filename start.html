@@ -23,44 +23,27 @@
 <body>
   <h1>利用開始</h1>
 
-  <form method="POST" action="https://script.google.com/macros/s/【あなたのGAS_URL】/exec">
+<form
+  method="POST"
+  action="https://script.google.com/macros/s/XXXX/exec"
+  target="_self"
+>
+  <input type="hidden" name="calendar_id" id="calendar_id">
+  <input type="hidden" name="action" value="start">
+  <input type="hidden" name="submit_token" id="submit_token">
 
-    <!-- 共通識別子 -->
-    <input type="hidden" name="calendar_id" id="calendar_id">
+  <label>
+    業務コード
+    <input type="text" name="job_code" required>
+  </label>
 
-    <!-- フェーズ識別 -->
-    <input type="hidden" name="action" value="start">
+  <label>
+    運転者名
+    <input type="text" name="driver_name" required>
+  </label>
 
-    <!-- 二重送信防止 -->
-    <input type="hidden" name="submit_token" id="submit_token">
-
-    <label>
-      業務コード
-      <input type="text" name="job_code" required>
-    </label>
-
-    <label>
-      運転者名
-      <input type="text" name="driver_name" required>
-    </label>
-
-    <label>
-      開始日時
-      <input type="datetime-local" name="start_datetime" id="start_datetime" required>
-    </label>
-
-    <label>
-      酒気帯び確認
-      <select name="alcohol_check" required>
-        <option value="">選択してください</option>
-        <option value="0">酒気帯びなし</option>
-        <option value="1">酒気帯びあり</option>
-      </select>
-    </label>
-
-    <button type="submit">開始を登録する</button>
-  </form>
-
+  <button type="submit">開始を登録する</button>
+</form>
   <script>
     // calendar_id 取得
     const params = new URLSearchParams(window.location.search);
