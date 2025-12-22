@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>利用開始</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+    input, select, button {
+      width: 100%;
+      box-sizing: border-box;
+      margin: 6px 0;
+    }
+    button {
+      margin-top: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>利用開始</h1>
+
+  <form method="POST" action="https://script.google.com/macros/s/【あなたのGAS_URL】/exec">
+
+    <!-- 共通識別子 -->
+    <input type="hidden" name="calendar_id" id="calendar_id">
+
+    <!-- フェーズ識別 -->
+    <input type="hidden" name="action" value="start">
+
+    <!-- 二重送信防止 -->
+    <input type="hidden" name="submit_token" id="submit_token">
+
+    <label>
+      業務コード
+      <input type="text" name="job_code" required>
+    </label>
+
+    <label>
+      運転者名
+      <input type="text" name="driver_name" required>
+    </label>
+
+    <label>
+      開始日時
+      <input type="datetime-local" name="start_datetime" id="start_datetime" required>
+    </label>
+
+    <label>
+      酒気帯び確認
+      <select name="alcohol_check" required>
+        <option value="">選択してください</option>
+        <option value="0">酒気帯びなし</option>
+        <option value="1">酒気帯びあり</option>
+      </select>
+    </label>
+
+    <button type="submit">開始を登録する</button>
+  </form>
+
+  <script>
+    // calendar_id 取得
+    const params = new URLSearchParams(window.location.search);
+    const calendarId = params.get("calendar_id");
+
+    if (!calendarId) {
+      document.body.innerHTML = "<p>calendar_id が指定されていません。</p>";
+    } else {
+      document.getElementById("calendar_id").value = calendarId;
+    }
+
+    // 開始日時を現在時刻で初期化
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    document.getElementById("start_datetime").value =
+      local.toISOString().slice(0, 16);
+
+    // submit_token（UUID簡易生成）
+    document.getElementById("submit_token").value =
+      crypto.randomUUID();
+  </script>
+</body>
+</html>
