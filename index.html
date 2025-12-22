@@ -7,5 +7,19 @@
 <body>
   <h1>社用車 利用実績 入力（②フェーズ）</h1>
   <p>このページは実績入力の入口です。</p>
+  <p id="vehicle-info"></p>
+  <script>
+    // URLクエリから calendar_id を取得
+    const params = new URLSearchParams(window.location.search);
+    const calendarId = params.get('calendar_id');
+  
+    const infoEl = document.getElementById('vehicle-info');
+  
+    if (calendarId) {
+      infoEl.textContent = `車両ID（calendar_id）：${calendarId}`;
+    } else {
+      infoEl.textContent = '車両ID（calendar_id）が指定されていません。';
+    }
+  </script>
 </body>
 </html>
