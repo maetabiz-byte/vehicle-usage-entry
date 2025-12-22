@@ -8,6 +8,7 @@
   <h1>社用車 利用実績 入力（②フェーズ）</h1>
   <p>このページは実績入力の入口です。</p>
   <p id="vehicle-info"></p>
+  <p id="reservation-info"></p>
   <form id="usage-form">
     <!-- calendar_id は hidden で保持 -->
     <input type="hidden" name="calendar_id" id="calendar_id">
@@ -29,22 +30,76 @@
     const calendarId = params.get('calendar_id');
   
     const infoEl = document.getElementById('vehicle-info');
+    const reservationInfoEl = document.getElementById('reservation-info');
   
     if (calendarId) {
       infoEl.textContent = `車両ID（calendar_id）：${calendarId}`;
       document.getElementById('calendar_id').value = calendarId;
+  
+      // ★ ここから追加：予約参照処理
+      fetchReferenceReservation(calendarId);
+  
     } else {
       infoEl.textContent = '車両ID（calendar_id）が指定されていません。';
     }
+  
+    // -------------------------
+    // 参照予約を取得する関数
+    // -------------------------
+    function fetchReferenceReservation(calendarId) {
+  
+      const accessTime = new Date().toISOString();
+  
+      fetch(
+        '＜Apps Script の Web API URL＞' +
+        '?calendar_id=' + encodeURIComponent(calendarId) +
+        '&access_time=' + encodeURIComponent(accessTime)
+      )
+        .then(res => res.json())
+        .then(data => {
+  
+          if (!data || !data.reservation_id) {
+            // 参照予約なし
+            reservationInfoEl.textContent = '参考となる予約はありません。';
+            return;
+          }
+  
+          // 参照予約あり（表示専用）
+          reservationInfoEl.textContent =
+            '参考予約：' +
+            data.start_time + '～' +
+            data.end_time + ' ' +
+            (data.job_name || '');
+  
+          // reservation_id は hidden に保持（使うかどうかは後で決める）
+          let hidden = document.getElementById('reservation_id');
+          if (!hidden) {
+            hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'reservation_id';
+            hidden.id = 'reservation_id';
+            document.getElementById('usage-form').appendChild(hidden);
+          }
+          hidden.value = data.reservation_id;
+        })
+        .catch(err => {
+          reservationInfoEl.textContent = '予約情報の取得に失敗しました。';
+          console.error(err);
+        });
+    }
+  
+    // 既存の submit 処理（そのまま）
     document.getElementById('usage-form').addEventListener('submit', (e) => {
       e.preventDefault();
-    
+  
       alert(
         '送信内容（仮）\n' +
         'calendar_id=' + document.getElementById('calendar_id').value + '\n' +
-        'driver_name=' + document.querySelector('[name="driver_name"]').value
+        'driver_name=' + document.querySelector('[name="driver_name"]').value + '\n' +
+        'reservation_id=' + (document.getElementById('reservation_id')?.value || '')
       );
     });
   </script>
+
 </body>
 </html>
