@@ -8,6 +8,21 @@
   <h1>社用車 利用実績 入力（②フェーズ）</h1>
   <p>このページは実績入力の入口です。</p>
   <p id="vehicle-info"></p>
+  <form id="usage-form">
+    <!-- calendar_id は hidden で保持 -->
+    <input type="hidden" name="calendar_id" id="calendar_id">
+  
+    <p>
+      <label>
+        運転者名：
+        <input type="text" name="driver_name">
+      </label>
+    </p>
+  
+    <p>
+      <button type="submit">送信（まだ保存されません）</button>
+    </p>
+  </form>
   <script>
     // URLクエリから calendar_id を取得
     const params = new URLSearchParams(window.location.search);
