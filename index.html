@@ -32,9 +32,19 @@
   
     if (calendarId) {
       infoEl.textContent = `車両ID（calendar_id）：${calendarId}`;
+      document.getElementById('calendar_id').value = calendarId;
     } else {
       infoEl.textContent = '車両ID（calendar_id）が指定されていません。';
     }
+    document.getElementById('usage-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+    
+      alert(
+        '送信内容（仮）\n' +
+        'calendar_id=' + document.getElementById('calendar_id').value + '\n' +
+        'driver_name=' + document.querySelector('[name="driver_name"]').value
+      );
+    });
   </script>
 </body>
 </html>
