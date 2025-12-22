@@ -59,7 +59,8 @@
       )
         .then(res => res.json())
         .then(data => {
-  
+          referenceReservation = data;
+
           if (!data || !data.reservation_id) {
             // 参照予約なし
             reservationInfoEl.textContent = '参考となる予約はありません。';
@@ -93,14 +94,25 @@
     // 既存の submit 処理（そのまま）
     document.getElementById('usage-form').addEventListener('submit', (e) => {
       e.preventDefault();
-  
-      alert(
+    
+      let msg =
         '送信内容（仮）\n' +
         'calendar_id=' + document.getElementById('calendar_id').value + '\n' +
-        'driver_name=' + document.querySelector('[name="driver_name"]').value + '\n' +
-        'reservation_id=' + (document.getElementById('reservation_id')?.value || '')
-      );
+        'driver_name=' + document.querySelector('[name="driver_name"]').value + '\n';
+    
+      if (referenceReservation && referenceReservation.reservation_id) {
+        msg +=
+          'reservation_id=' + referenceReservation.reservation_id + '\n' +
+          'start_time=' + referenceReservation.start_time + '\n' +
+          'end_time=' + referenceReservation.end_time + '\n' +
+          'job_name=' + (referenceReservation.job_name || '');
+      } else {
+        msg += 'reservation=なし';
+      }
+    
+      alert(msg);
     });
+
   </script>
 
 </body>
