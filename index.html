@@ -1,118 +1,78 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>社用車 利用</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body {
       font-family: sans-serif;
       margin: 16px;
-      line-height: 1.6;
+      color: #000;
     }
     h1 {
-      font-size: 1.2em;
+      font-size: 22px;
       margin-bottom: 12px;
     }
-    .section {
+    .box {
       border: 1px solid #ccc;
       padding: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
-    .job {
+    .job-code {
       font-weight: bold;
       margin-bottom: 4px;
     }
-    .time {
-      margin-top: 8px;
+    .job-name {
+      margin-bottom: 12px;
     }
-    .buttons {
-      text-align: center;
-      margin-top: 16px;
+    .time {
+      margin-bottom: 4px;
+    }
+    .location {
+      margin-top: 8px;
+      font-size: 14px;
+    }
+    .actions {
+      margin-top: 24px;
     }
     button {
-      padding: 10px 20px;
-      font-size: 1em;
-      margin: 6px;
+      font-size: 16px;
+      padding: 10px 16px;
     }
   </style>
 </head>
 <body>
 
-<h1>社用車 利用</h1>
-<div id="content">読み込み中…</div>
+  <h1>社用車 利用</h1>
 
-<script>
-const WEBAPP_URL =
-  'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
+  <div class="box">
+    <div class="job-code" id="jobCode">99-111111-01</div>
+    <div class="job-name" id="jobName">業務テスト</div>
 
-const params = new URLSearchParams(window.location.search);
-const calendarId = params.get('calendar_id');
-const content = document.getElementById('content');
+    <div class="time" id="startTime">開始：12/23 00:00</div>
+    <div class="time" id="endTime">終了：12/24 00:00</div>
 
-if (!calendarId) {
-  content.textContent = 'calendar_id が指定されていません。';
-} else {
+    <div class="location" id="location">
+      場所：羽田空港, 日本、〒144-0041 東京都大田区羽田空港
+    </div>
+  </div>
 
-  window.handleReservation = function (data) {
+  <div class="actions">
+    <button onclick="goStart()">開始入力へ</button>
+  </div>
 
-    if (!data || !Array.isArray(data.reservations)) {
-      content.textContent = '予約情報を取得できませんでした。';
-      return;
-    }
-
-    const now = new Date();
-    let active = null;
-
-    for (const r of data.reservations) {
-      const s = new Date(r.start_time);
-      const e = new Date(r.end_time);
-      if (now >= s && now <= e) {
-        active = r;
-        break;
+  <script>
+    function goStart() {
+      const params = new URLSearchParams(window.location.search);
+      const calendarId = params.get('calendar_id');
+      if (calendarId) {
+        window.location.href = 'start.html?calendar_id=' + encodeURIComponent(calendarId);
+      } else {
+        window.location.href = 'start.html';
       }
     }
-
-    if (!active) {
-      content.textContent = '現在有効な予約はありません。';
-      return;
-    }
-
-    const start = new Date(active.start_time);
-    const end = new Date(active.end_time);
-
-    content.innerHTML = `
-      <div class="section">
-        <div class="job">${active.parsed_job_code || ''}</div>
-        <div>${active.parsed_job_name || ''}</div>
-
-        <div class="time">
-          開始：${start.getMonth()+1}/${start.getDate()} ${start.getHours().toString().padStart(2,'0')}:${start.getMinutes().toString().padStart(2,'0')}<br>
-          終了：${end.getMonth()+1}/${end.getDate()} ${end.getHours().toString().padStart(2,'0')}:${end.getMinutes().toString().padStart(2,'0')}
-        </div>
-
-        ${active.location ? `<div class="time">場所：${active.location}</div>` : ``}
-      </div>
-
-      <div class="buttons">
-        <form action="start.html" method="GET" style="display:inline;">
-          <input type="hidden" name="calendar_id" value="${calendarId}">
-          <input type="hidden" name="job_code" value="${active.parsed_job_code || ''}">
-          <input type="hidden" name="job_name" value="${active.parsed_job_name || ''}">
-          <button type="submit">開始入力へ</button>
-        </form>
-        <br>
-        <button onclick="location.href='index.html?calendar_id=${calendarId}'">ホーム</button>
-      </div>
-    `;
-  };
-
-  const script = document.createElement('script');
-  script.src =
-    `${WEBAPP_URL}?calendar_id=${encodeURIComponent(calendarId)}&callback=handleReservation`;
-  document.body.appendChild(script);
-}
-</script>
+  </script>
 
 </body>
 </html>
