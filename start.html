@@ -23,27 +23,10 @@
 <body>
   <h1>利用開始</h1>
 
-<form
-  method="POST"
-  action="https://script.google.com/macros/s/XXXX/exec"
-  target="_self"
->
-  <input type="hidden" name="calendar_id" id="calendar_id">
-  <input type="hidden" name="action" value="start">
-  <input type="hidden" name="submit_token" id="submit_token">
+  <form method="POST" action="＜あなたの /exec URL＞">
+    <button type="submit">送信</button>
+  </form>
 
-  <label>
-    業務コード
-    <input type="text" name="job_code" required>
-  </label>
-
-  <label>
-    運転者名
-    <input type="text" name="driver_name" required>
-  </label>
-
-  <button type="submit">開始を登録する</button>
-</form>
   <script>
     // calendar_id 取得
     const params = new URLSearchParams(window.location.search);
