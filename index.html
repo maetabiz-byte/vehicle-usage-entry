@@ -4,144 +4,61 @@
   <meta charset="UTF-8">
   <title>社用車 利用開始</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 16px;
-    }
-    h1 {
-      font-size: 1.4em;
-      margin-bottom: 1em;
-    }
-    .section {
-      border: 1px solid #ccc;
-      padding: 12px;
-      margin-bottom: 16px;
-    }
-    .label {
-      font-weight: bold;
-      display: inline-block;
-      width: 6em;
-    }
-    button {
-      margin-top: 12px;
-      padding: 8px 16px;
-      font-size: 1em;
-    }
-    .warning {
-      border: 1px solid #f00;
-      padding: 12px;
-      color: #900;
-    }
-  </style>
 </head>
 <body>
 
 <h1>社用車 利用開始</h1>
-
-<div id="content">
-  読み込み中…
-</div>
+<div id="content">読み込み中…</div>
 
 <script>
-/* ===== 定数 ===== */
-const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
+const WEBAPP_URL =
+  'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
 
-/* ===== URL パラメータ取得 ===== */
 const params = new URLSearchParams(window.location.search);
 const calendarId = params.get('calendar_id');
-
 const content = document.getElementById('content');
 
 if (!calendarId) {
   content.textContent = 'calendar_id が指定されていません。';
 } else {
 
-  /* ===== JSONP コールバック ===== */
   window.handleReservation = function (data) {
-
     if (!data || !Array.isArray(data.reservations)) {
       content.textContent = '予約情報を取得できませんでした。';
       return;
     }
 
     const now = new Date();
-    const today = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
+    let active = null;
 
-    let activeReservation = null;
-
-    for (const item of data.reservations) {
-
-      const startTime = new Date(item.start_time);
-      const endTime   = new Date(item.end_time);
-      const isAllDay  = item.is_all_day === true;
-
-      let isActive = false;
-
-      if (isAllDay) {
-        const startDate = new Date(
-          startTime.getFullYear(),
-          startTime.getMonth(),
-          startTime.getDate()
-        );
-        const endDate = new Date(
-          endTime.getFullYear(),
-          endTime.getMonth(),
-          endTime.getDate()
-        );
-        isActive = (today >= startDate && today < endDate);
-      } else {
-        isActive = (now >= startTime && now <= endTime);
-      }
-
-      if (isActive) {
-        activeReservation = item;
+    for (const r of data.reservations) {
+      const s = new Date(r.start_time);
+      const e = new Date(r.end_time);
+      if (now >= s && now <= e) {
+        active = r;
         break;
       }
     }
 
-    if (!activeReservation) {
+    if (!active) {
       content.textContent = '本日有効な予約はありません。';
       return;
     }
 
-    const startLabelTime = new Date(activeReservation.start_time);
-    const mm = String(startLabelTime.getMonth() + 1).padStart(2, '0');
-    const dd = String(startLabelTime.getDate()).padStart(2, '0');
-    const hh = String(startLabelTime.getHours()).padStart(2, '0');
-    const mi = String(startLabelTime.getMinutes()).padStart(2, '0');
-    const startDisplay = `${mm}/${dd} ${hh}:${mi}`;
-
     content.innerHTML = `
-      <div class="section">
-        <div><span class="label">業務コード</span>${activeReservation.parsed_job_code || ''}</div>
-        <div><span class="label">業務内容</span>${activeReservation.parsed_job_name || ''}</div>
-        <div><span class="label">開始</span>${startDisplay}</div>
-
+      <div>
+        <div>業務コード：${active.parsed_job_code || ''}</div>
+        <div>業務内容：${active.parsed_job_name || ''}</div>
         <form action="start.html" method="GET">
           <input type="hidden" name="calendar_id" value="${calendarId}">
-          <input type="hidden" name="job_code" value="${activeReservation.parsed_job_code || ''}">
-          <input type="hidden" name="job_name" value="${activeReservation.parsed_job_name || ''}">
+          <input type="hidden" name="job_code" value="${active.parsed_job_code || ''}">
+          <input type="hidden" name="job_name" value="${active.parsed_job_name || ''}">
           <button type="submit">開始する</button>
-        </form>
-      </div>
-
-      <div class="warning">
-        ⚠ 強制的に開始する場合
-        <form action="start.html" method="GET">
-          <input type="hidden" name="calendar_id" value="${calendarId}">
-          <input type="hidden" name="force" value="1">
-          <button type="submit">強制的に開始する</button>
         </form>
       </div>
     `;
   };
 
-  /* ===== JSONP 実行 ===== */
   const script = document.createElement('script');
   script.src =
     `${WEBAPP_URL}?calendar_id=${encodeURIComponent(calendarId)}&callback=handleReservation`;
