@@ -3,93 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <title>社用車 利用実績 入力（入口）</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: sans-serif; padding: 12px; }
-    .box { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin: 12px 0; }
-    .muted { color:#666; }
-    .err { color:#b00020; font-weight: bold; }
-    a.button {
-      display:inline-block; padding: 10px 12px; border-radius: 8px;
-      background: #111; color:#fff; text-decoration:none;
+    body {
+      font-family: sans-serif;
+      margin: 24px;
+    }
+    .box {
+      border: 1px solid #ccc;
+      padding: 12px;
+      margin-bottom: 16px;
+      border-radius: 4px;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+    .ok {
+      color: green;
+      font-weight: bold;
+    }
+    button {
+      padding: 8px 16px;
+      font-size: 16px;
     }
   </style>
 </head>
 <body>
+
   <h1>社用車 利用実績 入力（入口）</h1>
 
   <div class="box">
-    <div>calendar_id：</div>
-    <div id="calendar_id_view" class="muted">（未指定）</div>
+    <strong>calendar_id :</strong><br>
+    <span id="calendar-id-display">(calendar_id がありません)</span>
   </div>
 
   <div class="box">
-    <h2 style="margin-top:0;">予約情報（Log参照）</h2>
-    <div id="status" class="muted">取得中…</div>
-    <div id="err" class="err"></div>
-
-    <div id="resv" style="display:none;">
-      <p>業務コード：<b id="job_code"></b></p>
-      <p>業務名：<b id="job_name"></b></p>
-      <p>時間：<b id="time_range"></b></p>
-      <p>場所：<b id="location"></b></p>
-      <p class="muted">raw：<span id="raw_title"></span></p>
+    <h2>予約情報（Log参照）</h2>
+    <div id="reservation-area">
+      <span class="error">URLに calendar_id を付けて開いてください。</span>
     </div>
   </div>
 
-  <a id="to_start" class="button" href="#">開始入力へ</a>
+  <div class="box">
+    <button id="start-button" disabled>開始入力へ</button>
+  </div>
 
-  <script>
-    // ★必ず差し替え：GASのWebアプリURL（/exec）
-    const WEBAPP_URL = "https://script.google.com/macros/s/＜あなたのGAS_WEBAPP_ID＞/exec";
+<script>
+(function () {
 
-    const params = new URLSearchParams(window.location.search);
-    const calendarId = params.get("calendar_id");
+  // ----------------------------
+  // 1. URL クエリ取得
+  // ----------------------------
+  const params = new URLSearchParams(window.location.search);
+  const calendarId = params.get('calendar_id');
 
-    const elCalendar = document.getElementById("calendar_id_view");
-    const elStatus = document.getElementById("status");
-    const elErr = document.getElementById("err");
-    const elResv = document.getElementById("resv");
+  const calendarIdDisplay = document.getElementById('calendar-id-display');
+  const reservationArea = document.getElementById('reservation-area');
+  const startButton = document.getElementById('start-button');
 
-    if (!calendarId) {
-      elCalendar.textContent = "（calendar_id がありません）";
-      elStatus.textContent = "";
-      elErr.textContent = "URLに calendar_id を付けて開いてください。";
-      document.getElementById("to_start").style.display = "none";
-    } else {
-      elCalendar.textContent = calendarId;
-      document.getElementById("to_start").href = "start.html?calendar_id=" + encodeURIComponent(calendarId);
+  if (!calendarId) {
+    calendarIdDisplay.textContent = '(calendar_id がありません)';
+    return;
+  }
 
-      fetch(WEBAPP_URL + "?calendar_id=" + encodeURIComponent(calendarId), { method: "GET" })
-        .then(r => r.json())
-        .then(data => {
-          if (data.status !== "OK") {
-            elStatus.textContent = "";
-            elErr.textContent = "doGet ERROR: " + (data.message || "unknown");
-            return;
-          }
+  calendarIdDisplay.textContent = calendarId;
 
-          if (!data.found) {
-            elStatus.textContent = "該当する予約（Log）が見つかりません。";
-            elResv.style.display = "none";
-            return;
-          }
+  // ----------------------------
+  // 2. JSONP callback 定義
+  // ----------------------------
+  window.onReservationLoaded = function (data) {
 
-          elStatus.textContent = "取得できました。";
-          document.getElementById("job_code").textContent = data.job_code || "";
-          document.getElementById("job_name").textContent = data.job_name || "";
-          document.getElementById("time_range").textContent = (data.start || "") + " ～ " + (data.end || "");
-          document.getElementById("location").textContent = data.location || "";
-          document.getElementById("raw_title").textContent = data.title_raw || "";
-
-          elResv.style.display = "block";
-        })
-        .catch(err => {
-          elStatus.textContent = "";
-          elErr.textContent = "fetch失敗（URL/権限/ネットワーク）";
-          console.error(err);
-        });
+    if (!data || data.found !== true) {
+      reservationArea.innerHTML =
+        '<span class="error">現在時刻を含む予約が見つかりません。</span>';
+      return;
     }
-  </script>
+
+    // 表示内容
+    const html = `
+      <div class="ok">予約が見つかりました</div>
+      <ul>
+        <li><strong>開始：</strong>${data.start_time}</li>
+        <li><strong>終了：</strong>${data.end_time}</li>
+        <li><strong>業務コード：</strong>${data.job_code ?? '(なし)'}</li>
+        <li><strong>業務名：</strong>${data.job_name ?? '(なし)'}</li>
+        <li><strong>件名：</strong>${data.title_raw ?? '(なし)'}</li>
+        <li><strong>場所：</strong>${data.location ?? '(なし)'}</li>
+      </ul>
+    `;
+    reservationArea.innerHTML = html;
+
+    // ----------------------------
+    // 3. start.html へ引き継ぐ
+    // ----------------------------
+    startButton.disabled = false;
+
+    startButton.onclick = function () {
+      const url = new URL('start.html', window.location.href);
+
+      // 必須
+      url.searchParams.set('calendar_id', calendarId);
+
+      // プリセット用（存在するもののみ）
+      if (data.job_code) url.searchParams.set('job_code', data.job_code);
+      if (data.job_name) url.searchParams.set('job_name', data.job_name);
+
+      window.location.href = url.toString();
+    };
+  };
+
+  // ----------------------------
+  // 4. JSONP 呼び出し（script 注入）
+  // ----------------------------
+  const WEBAPP_URL =
+    'https://script.google.com/macros/s/【あなたのGAS_WEBAPP_ID】/exec';
+
+  const script = document.createElement('script');
+  script.src =
+    WEBAPP_URL +
+    '?calendar_id=' + encodeURIComponent(calendarId) +
+    '&callback=onReservationLoaded';
+
+  script.onerror = function () {
+    reservationArea.innerHTML =
+      '<span class="error">予約情報の取得に失敗しました（通信エラー）</span>';
+  };
+
+  document.body.appendChild(script);
+
+})();
+</script>
+
 </body>
 </html>
