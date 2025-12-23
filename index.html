@@ -122,8 +122,8 @@ if (!calendarId) {
 
           <form action="start.html" method="GET">
             <input type="hidden" name="calendar_id" value="${calendarId}">
-            <input type="hidden" name="job_code" value="${activeReservation.job_code || ''}">
-            <input type="hidden" name="job_name" value="${activeReservation.job_name || ''}">
+            <input type="hidden" name="job_code" value="${activeReservation.parsed_job_code || ''}">
+            <input type="hidden" name="job_name" value="${activeReservation.parsed_job_name || ''}">
             <button type="submit">開始する</button>
           </form>
         </div>
