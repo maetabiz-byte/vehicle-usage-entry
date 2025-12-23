@@ -2,18 +2,20 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>社用車 利用開始</title>
+  <title>社用車 利用</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: sans-serif; margin: 16px; }
     .section { border: 1px solid #ccc; padding: 12px; margin-bottom: 16px; }
-    .label { font-weight: bold; display: inline-block; width: 6em; }
-    button { padding: 8px 16px; font-size: 1em; }
+    .status { border: 2px solid #c00; padding: 8px; font-weight: bold; text-align: center; }
+    .warn { border: 1px solid #f00; padding: 8px; margin-top: 12px; }
+    button { padding: 8px 16px; font-size: 1em; margin-top: 8px; }
+    .nav { margin-top: 16px; }
   </style>
 </head>
 <body>
 
-<h1>社用車 利用開始</h1>
+<h1>社用車 利用</h1>
 <div id="content">読み込み中…</div>
 
 <script>
@@ -28,10 +30,58 @@ if (!calendarId) {
   content.textContent = 'calendar_id が指定されていません。';
 } else {
 
-  window.handleReservation = function (data) {
+  window.handleIndex = function (data) {
 
+    /* ---------- 開始済（未完あり） ---------- */
+    if (data && data.started === true) {
+
+      const s = data.start_display || '';
+      const e = data.end_display || '';
+
+      content.innerHTML = `
+        <div class="status">記録開始済</div>
+
+        <div class="section">
+          ${data.job_code || ''}<br>
+          ${data.job_name || ''}<br>
+          ${data.driver_name || ''}
+        </div>
+
+        <div class="section">
+          ${s}<br>
+          ${e}
+        </div>
+
+        <div class="section">
+          開始距離：${data.start_odometer ?? ''}
+        </div>
+
+        <button disabled>到着入力へ</button>
+        <form action="end.html" method="GET">
+          <input type="hidden" name="usage_id" value="${data.usage_id}">
+          <button type="submit">終了入力へ</button>
+        </form>
+
+        <div class="warn">
+          ⚠ 前回の記録が未完のままです<br>
+          <form action="start.html" method="GET">
+            <input type="hidden" name="calendar_id" value="${calendarId}">
+            <input type="hidden" name="force" value="1">
+            <button type="submit">強制的に新しい開始を行う</button>
+          </form>
+        </div>
+
+        <div class="nav">
+          <button onclick="history.back()">戻る</button>
+          <button onclick="location.href='index.html?calendar_id=${calendarId}'">ホーム</button>
+        </div>
+      `;
+      return;
+    }
+
+    /* ---------- 未開始（予約表示） ---------- */
     if (!data || !Array.isArray(data.reservations)) {
-      content.textContent = '予約情報を取得できませんでした。';
+      content.textContent = '情報を取得できませんでした。';
       return;
     }
 
@@ -52,17 +102,15 @@ if (!calendarId) {
       return;
     }
 
-    const s = new Date(active.start_time);
-    const e = new Date(active.end_time);
-
     content.innerHTML = `
       <div class="section">
-        <div><span class="label">業務コード</span>${active.parsed_job_code || ''}</div>
-        <div><span class="label">業務内容</span>${active.parsed_job_name || ''}</div>
-        <div><span class="label">開始</span>${s.toLocaleString()}</div>
-        <div><span class="label">終了</span>${e.toLocaleString()}</div>
-        <div><span class="label">件名</span>${active.title_raw || ''}</div>
-        <div><span class="label">場所</span>${active.location || ''}</div>
+        ${active.parsed_job_code || ''}<br>
+        ${active.parsed_job_name || ''}
+      </div>
+
+      <div class="section">
+        開始：${new Date(active.start_time).toLocaleString()}<br>
+        終了：${new Date(active.end_time).toLocaleString()}
       </div>
 
       <form action="start.html" method="GET">
@@ -71,12 +119,16 @@ if (!calendarId) {
         <input type="hidden" name="job_name" value="${active.parsed_job_name || ''}">
         <button type="submit">開始入力へ</button>
       </form>
+
+      <div class="nav">
+        <button onclick="location.href='index.html?calendar_id=${calendarId}'">ホーム</button>
+      </div>
     `;
   };
 
   const script = document.createElement('script');
   script.src =
-    `${WEBAPP_URL}?calendar_id=${encodeURIComponent(calendarId)}&callback=handleReservation`;
+    `${WEBAPP_URL}?calendar_id=${encodeURIComponent(calendarId)}&callback=handleIndex`;
   document.body.appendChild(script);
 }
 </script>
