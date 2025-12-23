@@ -2,54 +2,46 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>社用車 利用実績 入力</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <style>
-    body {
-      font-family: sans-serif;
-    }
-    button {
-      display: block;
-      width: 100%;
-      margin: 8px 0;
-    }
-  </style>
+  <title>社用車 利用開始（予約参照）</title>
 </head>
-
 <body>
-  <h1>社用車 利用実績</h1>
 
-  <p id="vehicle-info"></p>
+<h1>社用車 利用開始</h1>
 
-  <!-- 開始への導線（今はこれだけ） -->
-  <form method="GET" action="start.html">
-    <!-- calendar_id は hidden で引き継ぐ -->
-    <input type="hidden" name="calendar_id" id="calendar_id">
+<!-- calendar_id を保持 -->
+<input type="hidden" id="calendar_id">
 
-    <button type="submit">利用を開始する</button>
-  </form>
+<h2>予約情報（参照）</h2>
 
-  <script>
-    // URL クエリから calendar_id を取得
-    const params = new URLSearchParams(window.location.search);
-    const calendarId = params.get("calendar_id");
+<div>
+  <strong>業務コード：</strong>
+  <span id="job_code_view">（未取得）</span>
+</div>
 
-    if (!calendarId) {
-      document.body.innerHTML = "<p>calendar_id が指定されていません。</p>";
-    } else {
-      document.getElementById("calendar_id").value = calendarId;
-      document.getElementById("vehicle-info").textContent =
-        "車両ID: " + calendarId;
-    }
+<div>
+  <strong>運転者：</strong>
+  <span id="driver_name_view">（未取得）</span>
+</div>
 
-    /*
-      【今後ここに追加する予定の処理】
-      - GAS に状態問い合わせ
-      - record_status に応じた表示切替
-        - 開始のみ
-        - 訪問／終了＋開始（例外）
-    */
-  </script>
+<div>
+  <strong>予約時間：</strong>
+  <span id="reserved_time_view">（未取得）</span>
+</div>
+
+<hr>
+
+<a id="start_link" href="#">利用開始へ</a>
+
+<script>
+  // calendar_id を URL クエリから取得
+  const params = new URLSearchParams(window.location.search);
+  const calendarId = params.get("calendar_id");
+  document.getElementById("calendar_id").value = calendarId;
+
+  // start.html へ calendar_id を渡すだけ
+  document.getElementById("start_link").href =
+    "start.html?calendar_id=" + encodeURIComponent(calendarId);
+</script>
+
 </body>
 </html>
