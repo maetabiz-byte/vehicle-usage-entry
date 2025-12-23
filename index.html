@@ -8,24 +8,13 @@
 
 <h1>社用車 利用開始</h1>
 
-<!-- calendar_id を保持 -->
-<input type="hidden" id="calendar_id">
-
 <h2>予約情報（参照）</h2>
 
-<div>
-  <strong>業務コード：</strong>
-  <span id="job_code_view">（未取得）</span>
-</div>
-
-<div>
-  <strong>運転者：</strong>
-  <span id="driver_name_view">（未取得）</span>
-</div>
-
-<div>
-  <strong>予約時間：</strong>
-  <span id="reserved_time_view">（未取得）</span>
+<div id="reservation">
+  <p>業務コード：<span id="job_code">（未取得）</span></p>
+  <p>業務名：<span id="job_name">（未取得）</span></p>
+  <p>予約時間：<span id="time_range">（未取得）</span></p>
+  <p>場所：<span id="location">（未取得）</span></p>
 </div>
 
 <hr>
@@ -33,31 +22,47 @@
 <a id="start_link" href="#">利用開始へ</a>
 
 <script>
-  // calendar_id を URL クエリから取得
-  const params = new URLSearchParams(window.location.search);
-  const calendarId = params.get("calendar_id");
-  document.getElementById("calendar_id").value = calendarId;
+(function () {
+  // ===== 設定 =====
+  const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbXXXXXXXXXXXX/exec";
+  // ↑ 必ずあなたの WebアプリURL に置き換える
 
-  // start.html へ calendar_id を渡すだけ
+  // ===== パラメータ取得 =====
+  const params = new URLSearchParams(location.search);
+  const calendarId = params.get("calendar_id");
+
+  if (!calendarId) {
+    document.getElementById("reservation").innerHTML =
+      "<p style='color:red'>calendar_id が指定されていません</p>";
+    return;
+  }
+
+  // 利用開始リンク
   document.getElementById("start_link").href =
     "start.html?calendar_id=" + encodeURIComponent(calendarId);
-  // 予約情報を取得
-  fetch(
-    "https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec"
-    + "?calendar_id=" + encodeURIComponent(calendarId)
-  )
-  .then(res => res.json())
-  .then(data => {
-    if (!data.found) return;
 
-    // タイトルから業務コード・名称を分ける（暫定）
-    document.getElementById("job_code_view").textContent = data.title;
-    document.getElementById("driver_name_view").textContent = "（予約参照）";
-    document.getElementById("reserved_time_view").textContent =
-      new Date(data.start).toLocaleString() +
-      " ～ " +
-      new Date(data.end).toLocaleString();
-  });
+  // ===== 予約取得 =====
+  fetch(WEBAPP_URL + "?calendar_id=" + encodeURIComponent(calendarId))
+    .then(res => res.json())
+    .then(data => {
+      if (!data.found) {
+        document.getElementById("reservation").innerHTML =
+          "<p>現在有効な予約はありません</p>";
+        return;
+      }
+
+      document.getElementById("job_code").textContent = data.job_code || "";
+      document.getElementById("job_name").textContent = data.job_name || "";
+      document.getElementById("time_range").textContent =
+        data.start + " ～ " + data.end;
+      document.getElementById("location").textContent = data.location || "";
+    })
+    .catch(err => {
+      document.getElementById("reservation").innerHTML =
+        "<p style='color:red'>取得エラー</p>";
+      console.error(err);
+    });
+})();
 </script>
 
 </body>
