@@ -2,74 +2,134 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>社用車 利用開始（実績登録）</title>
+  <title>利用開始</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; padding: 12px; }
+    .box { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin: 12px 0; }
+    label { display:block; margin-top: 10px; font-weight: bold; }
+    input { width: 100%; padding: 8px; box-sizing: border-box; }
+    button { width:100%; padding: 10px; margin-top: 12px; }
+    .muted { color:#666; }
+    .err { color:#b00020; font-weight:bold; }
+    .ok { color:#0a7a0a; font-weight:bold; }
+  </style>
 </head>
 <body>
+  <h1>利用開始</h1>
 
-<h1>利用開始（実績登録）</h1>
+  <div id="err" class="err"></div>
+  <div id="msg" class="muted"></div>
 
-<form
-  method="POST"
-  action="https://script.google.com/macros/s/AKfycbx1IiUG463iRqi1MQq1EkhEcnJ1Zra-8ywfQ7WBx3O2DcsfNlcDc4KOZZDLGTt/exec"
->
-
-  <!-- calendar_id -->
-  <input type="hidden" name="calendar_id" id="calendar_id">
-
-  <div>
-    <label>業務コード</label><br>
-    <input type="text" name="job_code" id="job_code">
+  <div class="box">
+    <h2 style="margin-top:0;">予約情報（Log参照）</h2>
+    <p>業務コード：<b id="job_code_view" class="muted">（未取得）</b></p>
+    <p>業務名：<b id="job_name_view" class="muted">（未取得）</b></p>
+    <p>時間：<b id="time_range_view" class="muted">（未取得）</b></p>
+    <p>場所：<b id="location_view" class="muted">（未取得）</b></p>
   </div>
 
-  <div>
-    <label>運転者</label><br>
-    <input type="text" name="driver_name" id="driver_name">
-  </div>
+  <form id="startForm">
+    <input type="hidden" name="calendar_id" id="calendar_id">
+    <input type="hidden" name="submit_token" id="submit_token">
 
-  <div>
-    <label>開始日時</label><br>
-    <input type="datetime-local" name="start_datetime" id="start_datetime">
-  </div>
+    <label>開始日時</label>
+    <input type="datetime-local" name="start_datetime" id="start_datetime" required>
 
-  <div>
-    <label>酒気帯び確認</label><br>
-    <select name="alcohol_check" required>
-      <option value="">選択してください</option>
-      <option value="0">問題なし</option>
-      <option value="1">問題あり</option>
-    </select>
-  </div>
+    <label>運転者名</label>
+    <input type="text" name="driver_name" id="driver_name" placeholder="例：テスト太郎" required>
 
-  <!-- 二重送信防止 -->
-  <input type="hidden" name="submit_token" id="submit_token">
+    <label>業務コード（予約から自動。必要なら手修正可）</label>
+    <input type="text" name="job_code" id="job_code" required>
 
-  <hr>
+    <button type="submit">開始を登録する</button>
+  </form>
 
-  <h3>予約情報（参照）</h3>
-  <div id="reservation_info">
-    （ここに予約情報を表示予定）
-  </div>
+  <script>
+    // ★必ず差し替え：GASのWebアプリURL（/exec）
+    const WEBAPP_URL = "https://script.google.com/macros/s/＜あなたのGAS_WEBAPP_ID＞/exec";
 
-  <hr>
+    const params = new URLSearchParams(window.location.search);
+    const calendarId = params.get("calendar_id");
+    const elErr = document.getElementById("err");
+    const elMsg = document.getElementById("msg");
 
-  <button type="submit">利用開始を登録</button>
+    if (!calendarId) {
+      elErr.textContent = "calendar_id がありません。index.html から遷移してください。";
+      document.getElementById("startForm").style.display = "none";
+    } else {
+      document.getElementById("calendar_id").value = calendarId;
+    }
 
-</form>
+    // 開始日時 初期値
+    const now = new Date();
+    const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    document.getElementById("start_datetime").value = localNow.toISOString().slice(0, 16);
 
-<script>
-  // URL クエリ取得
-  const params = new URLSearchParams(window.location.search);
+    // submit_token
+    document.getElementById("submit_token").value = crypto.randomUUID();
 
-  // calendar_id
-  const calendarId = params.get("calendar_id");
-  document.getElementById("calendar_id").value = calendarId;
+    // 予約参照（Log）
+    if (calendarId) {
+      fetch(WEBAPP_URL + "?calendar_id=" + encodeURIComponent(calendarId), { method: "GET" })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status !== "OK") {
+            elErr.textContent = "doGet ERROR: " + (data.message || "unknown");
+            return;
+          }
+          if (!data.found) {
+            elMsg.textContent = "該当する予約（Log）が見つかりません（開始登録は可能）";
+            return;
+          }
+          document.getElementById("job_code_view").textContent = data.job_code || "";
+          document.getElementById("job_name_view").textContent = data.job_name || "";
+          document.getElementById("time_range_view").textContent = (data.start || "") + " ～ " + (data.end || "");
+          document.getElementById("location_view").textContent = data.location || "";
 
-  // submit_token
-  document.getElementById("submit_token").value =
-    crypto.randomUUID();
+          // 入力欄へプリセット
+          if (data.job_code) document.getElementById("job_code").value = data.job_code;
+        })
+        .catch(() => {
+          elErr.textContent = "予約取得に失敗（URL/権限/ネットワーク）";
+        });
+    }
 
-  // ※ 予約情報取得・初期値セットは次工程
-</script>
+    // 送信（doPost）
+    document.getElementById("startForm").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      elErr.textContent = "";
+      elMsg.textContent = "送信中…";
 
+      const fd = new FormData(ev.target);
+      const body = new URLSearchParams();
+      for (const [k, v] of fd.entries()) body.append(k, v);
+
+      try {
+        const res = await fetch(WEBAPP_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          body: body.toString()
+        });
+
+        const text = await res.text();
+        if (!res.ok) {
+          elErr.textContent = "doPost HTTPエラー: " + res.status + " / " + text;
+          elMsg.textContent = "";
+          return;
+        }
+
+        if (String(text).trim() === "OK") {
+          elMsg.innerHTML = "<span class='ok'>登録OK</span>";
+        } else {
+          elErr.textContent = "doPost 応答が想定外: " + text;
+          elMsg.textContent = "";
+        }
+      } catch (e) {
+        elErr.textContent = "doPost 失敗（URL/権限/ネットワーク）";
+        elMsg.textContent = "";
+      }
+    });
+  </script>
 </body>
 </html>
