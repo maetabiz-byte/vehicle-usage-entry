@@ -8,14 +8,25 @@
   <style>
     body {
       font-family: sans-serif;
+      padding: 12px;
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: bold;
     }
     input, select, button {
       width: 100%;
       box-sizing: border-box;
-      margin: 6px 0;
+      margin-top: 4px;
+      padding: 6px;
     }
     button {
-      margin-top: 12px;
+      margin-top: 16px;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -23,29 +34,63 @@
 <body>
   <h1>利用開始</h1>
 
-  <form method="POST" action="＜あなたの /exec URL＞">
-    <input type="hidden" name="calendar_id" value="TEST_CALENDAR">
-    <button type="submit">送信</button>
+  <!-- エラー表示用 -->
+  <div id="error" class="error"></div>
+
+  <form method="POST" action="https://script.google.com/macros/s/＜あなたのGAS_EXEC_URL＞/exec">
+
+    <!-- calendar_id（必須） -->
+    <input type="hidden" name="calendar_id" id="calendar_id">
+
+    <label>
+      業務コード
+      <input type="text" name="job_code" required>
+    </label>
+
+    <label>
+      運転者名
+      <input type="text" name="driver_name" required>
+    </label>
+
+    <label>
+      開始日時
+      <input type="datetime-local" name="start_datetime" id="start_datetime" required>
+    </label>
+
+    <label>
+      酒気帯び確認
+      <select name="alcohol_check" required>
+        <option value="">選択してください</option>
+        <option value="OK">問題なし</option>
+        <option value="NG">問題あり</option>
+      </select>
+    </label>
+
+    <!-- 再送・二重送信対策（将来用） -->
+    <input type="hidden" name="submit_token" id="submit_token">
+
+    <button type="submit">開始を登録する</button>
   </form>
 
   <script>
-    // calendar_id 取得
+    // ===== URLパラメータ取得 =====
     const params = new URLSearchParams(window.location.search);
     const calendarId = params.get("calendar_id");
 
     if (!calendarId) {
-      document.body.innerHTML = "<p>calendar_id が指定されていません。</p>";
+      document.getElementById("error").textContent =
+        "calendar_id が指定されていません。index.html から遷移してください。";
     } else {
       document.getElementById("calendar_id").value = calendarId;
     }
 
-    // 開始日時を現在時刻で初期化
+    // ===== 開始日時を現在時刻で初期化 =====
     const now = new Date();
-    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
     document.getElementById("start_datetime").value =
-      local.toISOString().slice(0, 16);
+      localNow.toISOString().slice(0, 16);
 
-    // submit_token（UUID簡易生成）
+    // ===== submit_token 生成 =====
     document.getElementById("submit_token").value =
       crypto.randomUUID();
   </script>
