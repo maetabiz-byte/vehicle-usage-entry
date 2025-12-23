@@ -50,52 +50,26 @@ if (!calendarId) {
   content.textContent = 'calendar_id が指定されていません。';
 } else {
 
-  const payload = {
-    calendar_id: calendarId,
-    job_code: jobCode,
-    job_name: jobName,
-    force: isForce
-  };
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
 
-  fetch(WEBAPP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => res.json())
-  .then(data => {
+  content.innerHTML = `
+    <div class="section">
+      <div>業務コード：${jobCode}</div>
+      <div>業務内容：${jobName}</div>
+      <div>開始日：${mm}/${dd}</div>
+    </div>
 
-    if (!data || data.status !== 'OK') {
-      content.innerHTML = `
-        <div class="warn">開始処理に失敗しました。</div>
-      `;
-      return;
-    }
+    <form action="${WEBAPP_URL}" method="post">
+      <input type="hidden" name="calendar_id" value="${calendarId}">
+      <input type="hidden" name="job_code" value="${jobCode}">
+      <input type="hidden" name="job_name" value="${jobName}">
+      <input type="hidden" name="force" value="${isForce ? '1' : ''}">
+      <button type="submit">開始を登録する</button>
+    </form>
+  `;
 
-    const now = new Date();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mi = String(now.getMinutes()).padStart(2, '0');
-
-    const timeLabel = `${mm}/${dd} ${hh}:${mi}`;
-
-    content.innerHTML = `
-      <div class="section">
-        <div>業務コード：${jobCode}</div>
-        <div>業務内容：${jobName}</div>
-        <div>開始時刻：${timeLabel}</div>
-      </div>
-
-      <div>
-        利用を開始しました。
-      </div>
-    `;
-  })
-  .catch(err => {
-    console.error(err);
-    content.textContent = '通信エラーが発生しました。';
-  });
 }
 </script>
 
