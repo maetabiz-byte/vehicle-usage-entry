@@ -5,71 +5,93 @@
   <title>社用車 利用実績 開始</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 16px;
-    }
-    .section {
-      margin-bottom: 24px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #ccc;
-    }
-    button {
-      padding: 8px 12px;
-      font-size: 1em;
-    }
-    .warn {
-      margin-top: 16px;
-      color: #b00000;
-      font-weight: bold;
-    }
+    body { font-family: sans-serif; margin: 16px; }
+    .section { margin-bottom: 16px; }
+    label { display: block; margin-top: 8px; }
+    input, select { width: 100%; padding: 6px; font-size: 1em; }
+    button { margin-top: 16px; padding: 8px 16px; font-size: 1em; }
+    .error { color: #b00000; font-weight: bold; }
   </style>
 </head>
 <body>
 
 <h2>社用車 利用実績 開始</h2>
 
-<div id="content">処理中…</div>
+<div id="content"></div>
 
 <script>
-/* ===== 設定 ===== */
-const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec'; // ← 必ず差し替え
+const WEBAPP_URL =
+  'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
 
-/* ===== URLパラメータ ===== */
 const params = new URLSearchParams(window.location.search);
-
 const calendarId = params.get('calendar_id');
-const jobCode    = params.get('job_code') || '';
-const jobName    = params.get('job_name') || '';
-const isForce    = params.get('force') === '1';
+const jobCode = params.get('job_code') || '';
+const jobName = params.get('job_name') || '';
 
-/* ===== 表示領域 ===== */
 const content = document.getElementById('content');
 
 if (!calendarId) {
-  content.textContent = 'calendar_id が指定されていません。';
+  content.innerHTML = '<div class="error">calendar_id がありません。</div>';
 } else {
 
-  const now = new Date();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-
   content.innerHTML = `
-    <div class="section">
-      <div>業務コード：${jobCode}</div>
-      <div>業務内容：${jobName}</div>
-      <div>開始日：${mm}/${dd}</div>
-    </div>
-
-    <form action="${WEBAPP_URL}" method="post">
+    <form id="startForm" method="POST" action="${WEBAPP_URL}">
       <input type="hidden" name="calendar_id" value="${calendarId}">
-      <input type="hidden" name="job_code" value="${jobCode}">
-      <input type="hidden" name="job_name" value="${jobName}">
-      <input type="hidden" name="force" value="${isForce ? '1' : ''}">
-      <button type="submit">開始を登録する</button>
+      <input type="hidden" name="submit_token" id="submit_token">
+
+      <div class="section">
+        <label>業務コード
+          <input type="text" name="job_code" value="${jobCode}">
+        </label>
+        <label>業務内容
+          <input type="text" name="job_name" value="${jobName}">
+        </label>
+        <label>運転者名
+          <input type="text" name="driver_name">
+        </label>
+      </div>
+
+      <div class="section">
+        <label>開始時走行距離
+          <input type="number" name="start_odometer" required>
+        </label>
+      </div>
+
+      <div class="section">
+        <label>酒気帯び確認方法
+          <select name="alcohol_check_method" id="alcohol_method" required>
+            <option value="">選択してください</option>
+            <option value="対面">対面</option>
+            <option value="非対面">非対面</option>
+          </select>
+        </label>
+        <label>測定値
+          <input type="number" name="alcohol_value" id="alcohol_value" step="0.01" required>
+        </label>
+        <div id="alcoholError" class="error"></div>
+      </div>
+
+      <button type="submit" id="submitBtn">開始を登録する</button>
     </form>
   `;
 
+  document.getElementById('submit_token').value =
+    crypto.randomUUID();
+
+  const alcoholValue = document.getElementById('alcohol_value');
+  const submitBtn = document.getElementById('submitBtn');
+  const errorDiv = document.getElementById('alcoholError');
+
+  alcoholValue.addEventListener('input', () => {
+    const v = Number(alcoholValue.value);
+    if (v !== 0) {
+      submitBtn.disabled = true;
+      errorDiv.textContent = '酒気帯びのため登録できません。';
+    } else {
+      submitBtn.disabled = false;
+      errorDiv.textContent = '';
+    }
+  });
 }
 </script>
 
