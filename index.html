@@ -41,6 +41,23 @@
   // start.html へ calendar_id を渡すだけ
   document.getElementById("start_link").href =
     "start.html?calendar_id=" + encodeURIComponent(calendarId);
+  // 予約情報を取得
+  fetch(
+    "https://script.google.com/macros/s/AKfycbx1IiUG463iRqi1MQq1EkhEcnJ1Zra-8ywfQ7WBx3O2DcsfNlcDc4KOZZDLGTt/exec"
+    + "?calendar_id=" + encodeURIComponent(calendarId)
+  )
+  .then(res => res.json())
+  .then(data => {
+    if (!data.found) return;
+
+    // タイトルから業務コード・名称を分ける（暫定）
+    document.getElementById("job_code_view").textContent = data.title;
+    document.getElementById("driver_name_view").textContent = "（予約参照）";
+    document.getElementById("reserved_time_view").textContent =
+      new Date(data.start).toLocaleString() +
+      " ～ " +
+      new Date(data.end).toLocaleString();
+  });
 </script>
 
 </body>
