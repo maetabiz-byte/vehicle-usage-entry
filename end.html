@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>社用車 利用実績 終了</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: sans-serif; margin: 16px; }
+    h2 { margin-top: 0; }
+    .section { margin-bottom: 16px; }
+    label { display: block; margin-top: 8px; }
+    input, select { width: 100%; padding: 6px; font-size: 1em; }
+    button { margin-top: 16px; padding: 8px 16px; font-size: 1em; }
+    .warn { color: #b00000; font-weight: bold; }
+    .muted { color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<h2>社用車 利用実績 終了</h2>
+
+<div id="content"></div>
+
+<script>
+  const WEBAPP_URL =
+    'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
+
+  const params = new URLSearchParams(window.location.search);
+  const calendarId = params.get('calendar_id');
+
+  const content = document.getElementById('content');
+
+  if (!calendarId) {
+    content.innerHTML = '<div class="warn">calendar_id がありません。</div>';
+  } else {
+    content.innerHTML = `
+      <form method="POST" action="${WEBAPP_URL}">
+        <input type="hidden" name="action" value="end">
+        <input type="hidden" name="calendar_id" value="${calendarId}">
+        <input type="hidden" name="submit_token" id="submit_token">
+
+        <div class="section">
+          <div class="muted">※ 終了対象は GAS 側で「最新1件（created_at 最大）」として特定される想定です。</div>
+        </div>
+
+        <div class="section">
+          <label>運転者氏名（開始時の追記・修正用）
+            <input type="text" name="driver_name" placeholder="未修正なら空欄のままでも可">
+          </label>
+        </div>
+
+        <div class="section">
+          <label>終了時走行距離
+            <input type="number" name="end_odometer" required>
+          </label>
+        </div>
+
+        <div class="section">
+          <label>終了地点区分コード（6桁）
+            <input type="text" name="end_location_code" inputmode="numeric" pattern="\\d{6}" maxlength="6" placeholder="例: 001002" required>
+          </label>
+          <label>終了地点（任意）
+            <input type="text" name="end_location_text" placeholder="必要な場合のみ">
+          </label>
+        </div>
+
+        <div class="section">
+          <label>酒気帯び確認方法（終了）
+            <select name="end_alcohol_check_method" id="end_alcohol_method" required>
+              <option value="">選択してください</option>
+              <option value="対面">対面</option>
+              <option value="非対面">非対面</option>
+            </select>
+          </label>
+
+          <label>測定値（終了）
+            <input type="number" name="end_alcohol_value" id="end_alcohol_value" step="0.01" required>
+          </label>
+          <div id="alcoholError" class="warn"></div>
+        </div>
+
+        <button type="submit" id="submitBtn">終了を登録する</button>
+      </form>
+
+      <button onclick="history.back()">戻る</button>
+    `;
+
+    document.getElementById('submit_token').value = crypto.randomUUID();
+
+    const alcoholValue = document.getElementById('end_alcohol_value');
+    const submitBtn = document.getElementById('submitBtn');
+    const errorDiv = document.getElementById('alcoholError');
+
+    alcoholValue.addEventListener('input', () => {
+      const v = Number(alcoholValue.value);
+      if (v !== 0) {
+        submitBtn.disabled = true;
+        errorDiv.textContent = '酒気帯びのため登録できません。';
+      } else {
+        submitBtn.disabled = false;
+        errorDiv.textContent = '';
+      }
+    });
+  }
+</script>
+
+</body>
+</html>
