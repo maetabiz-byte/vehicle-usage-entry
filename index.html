@@ -5,73 +5,201 @@
   <title>社用車 利用</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 16px;
-      color: #000;
-    }
-    h1 {
-      font-size: 22px;
-      margin-bottom: 12px;
-    }
-    .box {
-      border: 1px solid #ccc;
-      padding: 12px;
-      margin-bottom: 20px;
-    }
-    .job-code {
-      font-weight: bold;
-      margin-bottom: 4px;
-    }
-    .job-name {
-      margin-bottom: 12px;
-    }
-    .time {
-      margin-bottom: 4px;
-    }
-    .location {
-      margin-top: 8px;
-      font-size: 14px;
-    }
-    .actions {
-      margin-top: 24px;
-    }
-    button {
-      font-size: 16px;
-      padding: 10px 16px;
-    }
+    body { font-family: sans-serif; margin: 16px; color: #000; }
+    h1 { font-size: 22px; margin-bottom: 12px; }
+    .box { border: 1px solid #ccc; padding: 12px; margin-bottom: 20px; }
+    .job-code { font-weight: bold; margin-bottom: 4px; }
+    .job-name { margin-bottom: 12px; }
+    .time { margin-bottom: 4px; }
+    .location { margin-top: 8px; font-size: 14px; }
+    .actions { margin-top: 24px; display: grid; gap: 10px; }
+    button { font-size: 16px; padding: 10px 12px; }
+    .warn { color: #b00000; font-weight: bold; margin-bottom: 12px; }
+    .muted { color: #555; font-size: 13px; }
   </style>
 </head>
 <body>
 
   <h1>社用車 利用</h1>
 
-  <div class="box">
-    <div class="job-code" id="jobCode">99-111111-01</div>
-    <div class="job-name" id="jobName">業務テスト</div>
-
-    <div class="time" id="startTime">開始：12/23 00:00</div>
-    <div class="time" id="endTime">終了：12/24 00:00</div>
-
-    <div class="location" id="location">
-      場所：羽田空港, 日本、〒144-0041 東京都大田区羽田空港
-    </div>
-  </div>
-
-  <div class="actions">
-    <button onclick="goStart()">開始入力へ</button>
-  </div>
+  <div id="content"></div>
 
   <script>
-    function goStart() {
-      const params = new URLSearchParams(window.location.search);
-      const calendarId = params.get('calendar_id');
-      if (calendarId) {
-        window.location.href = 'start.html?calendar_id=' + encodeURIComponent(calendarId);
-      } else {
-        window.location.href = 'start.html';
-      }
+    const WEBAPP_URL =
+      'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
+
+    function getParam(name) {
+      return new URLSearchParams(window.location.search).get(name);
     }
+
+    function ymd(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function md(d) {
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${m}/${day}`;
+    }
+
+    function hm(d) {
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      return `${h}:${m}`;
+    }
+
+    // ISO/Date文字列を Date に変換（失敗したら null）
+    function toDate(v) {
+      if (!v) return null;
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // JSON または JSONP を受ける（doGet がどちらでも壊れない）
+    async function fetchDoGet(calendarId) {
+      const url = `${WEBAPP_URL}?calendar_id=${encodeURIComponent(calendarId)}`;
+      const res = await fetch(url, { method: 'GET' });
+      const text = await res.text();
+
+      // まず JSON として試す
+      try {
+        return JSON.parse(text);
+      } catch (_) {}
+
+      // JSONP の可能性：callbackName({...});
+      // text の最初の '(' と最後の ')' の間を JSON として読む
+      const firstParen = text.indexOf('(');
+      const lastParen = text.lastIndexOf(')');
+      if (firstParen !== -1 && lastParen !== -1 && lastParen > firstParen) {
+        const jsonPart = text.slice(firstParen + 1, lastParen);
+        try {
+          return JSON.parse(jsonPart);
+        } catch (_) {}
+      }
+
+      return { error: 'doGet response parse failed', raw: text };
+    }
+
+    // 終日イベント：表示用に end を 1日引く（データは触らない）
+    function formatReservationForDisplay(r) {
+      const isAllDay = !!r.is_all_day || r.is_all_day === 'TRUE';
+
+      // GAS 側の列名に揺れがあっても拾えるようにする
+      const startRaw = r.start_time || r.start || r.startTime || null;
+      const endRaw   = r.end_time   || r.end   || r.endTime   || null;
+
+      const startD = toDate(startRaw);
+      const endD   = toDate(endRaw);
+
+      if (!startD || !endD) {
+        return {
+          isAllDay,
+          startText: '(不明)',
+          endText: '(不明)'
+        };
+      }
+
+      if (isAllDay) {
+        // 表示だけ end-1日
+        const endMinus1 = new Date(endD.getTime());
+        endMinus1.setDate(endMinus1.getDate() - 1);
+
+        return {
+          isAllDay,
+          startText: `${md(startD)}（終日）`,
+          endText: `${md(endMinus1)}（終日）`
+        };
+      }
+
+      return {
+        isAllDay,
+        startText: `${md(startD)} ${hm(startD)}`,
+        endText: `${md(endD)} ${hm(endD)}`
+      };
+    }
+
+    function buildHtml({ calendarId, reservation, usageState }) {
+      const jobCode = reservation?.parsed_job_code || reservation?.job_code || reservation?.jobCode || '';
+      const jobName = reservation?.parsed_job_name || reservation?.job_name || reservation?.jobName || reservation?.event_title_raw || '';
+      const location = reservation?.event_location || reservation?.location || '';
+
+      const timeDisp = reservation ? formatReservationForDisplay(reservation) : null;
+
+      const stateNote = (usageState)
+        ? `<div class="muted">状態：${usageState}</div>`
+        : `<div class="muted">状態：未判定（予約情報のみ）</div>`;
+
+      // 導線：usage_state が無い場合は「開始入力へ」だけにして安全側
+      const showStartBtn = !usageState || usageState === 'not_started' || usageState === 'completed';
+      const showEndBtn   = usageState === 'in_progress';
+
+      const btnStart = showStartBtn
+        ? `<button onclick="goStart()">開始入力へ</button>`
+        : '';
+
+      const btnEnd = showEndBtn
+        ? `<button onclick="goEnd()">訪問／終了へ</button>`
+        : '';
+
+      return `
+        <div class="box">
+          <div class="job-code">${jobCode || '(業務コード不明)'}</div>
+          <div class="job-name">${jobName || '(業務名不明)'}</div>
+
+          <div class="time">開始：${timeDisp ? timeDisp.startText : '(不明)'}</div>
+          <div class="time">終了：${timeDisp ? timeDisp.endText : '(不明)'}</div>
+
+          <div class="location">場所：${location || '(不明)'}</div>
+          ${stateNote}
+        </div>
+
+        <div class="actions">
+          ${btnStart}
+          ${btnEnd}
+        </div>
+      `;
+    }
+
+    function goStart() {
+      const calendarId = getParam('calendar_id');
+      // 予約由来の job_code / job_name を引き回したい場合はここで付与する
+      window.location.href = 'start.html?calendar_id=' + encodeURIComponent(calendarId);
+    }
+
+    function goEnd() {
+      const calendarId = getParam('calendar_id');
+      window.location.href = 'end.html?calendar_id=' + encodeURIComponent(calendarId);
+    }
+
+    (async () => {
+      const content = document.getElementById('content');
+      const calendarId = getParam('calendar_id');
+
+      if (!calendarId) {
+        content.innerHTML = '<div class="warn">calendar_id がありません。</div>';
+        return;
+      }
+
+      const data = await fetchDoGet(calendarId);
+
+      if (data.error) {
+        content.innerHTML = `<div class="warn">取得エラー：${data.error}</div>`;
+        return;
+      }
+
+      // doGetが「reservations[]」形式の場合：先頭を採用（現状のGAS互換）
+      // doGetが「reservation / usage_state / latest_usage_record」等を返す拡張形式でも壊れないようにする
+      const reservation =
+        data.reservation
+        || (Array.isArray(data.reservations) && data.reservations.length ? data.reservations[0] : null);
+
+      const usageState = data.usage_state || data.usageState || null;
+
+      content.innerHTML = buildHtml({ calendarId, reservation, usageState });
+    })();
   </script>
 
 </body>
