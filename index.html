@@ -1,163 +1,41 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>社用車 利用状況</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 1em;
-    }
-    .label {
-      font-weight: bold;
-    }
-    .value {
-      margin-left: 0.5em;
-    }
-    .block {
-      margin-bottom: 0.8em;
-    }
-    .error {
-      color: red;
-    }
-  </style>
-</head>
-
-<body>
-
-<h2>社用車 利用状況</h2>
-
-<div id="status">読み込み中...</div>
-
 <script>
-/* ===============================
- * 設定
- * =============================== */
-var SPREADSHEET_ID = '1wcrXfS43vpdhTrMtgBQufpXwAps7PF86mcoJsVHYt6s'; // 予約（Log）シート
-var SHEET_GID = 'od6'; // 通常は od6
+const params = new URLSearchParams(location.search);
+const calendarId = params.get('calendar_id') || '';
 
-/* ===============================
- * ユーティリティ
- * =============================== */
-function getParam(name) {
-  var m = location.search.match(new RegExp('[?&]' + name + '=([^&]+)'));
-  return m ? decodeURIComponent(m[1]) : null;
-}
+const titleEl = document.getElementById('reservation-title');
+const timeEl  = document.getElementById('reservation-time');
+const startLink = document.getElementById('start-link');
 
-function toDate(v) {
-  if (!v) return null;
+// start.html には必ず行ける
+startLink.href = `start.html?calendar_id=${encodeURIComponent(calendarId)}`;
 
-  if (Object.prototype.toString.call(v) === '[object Date]') {
-    return isNaN(v.getTime()) ? null : v;
-  }
+// --- 初期表示（保険） ---
+titleEl.textContent = '予約情報を取得できていません';
+timeEl.textContent  = '（直接入力で開始できます）';
 
-  var s = String(v);
+// --- 予約取得（失敗しても無視） ---
+const SHEET_ID = '1wcrXfS43vpdhTrMtgBQufpXwAps7PF86mcoJsVHYt6s';
+const GID = '0'; // ※正しくなくてもOK（今日は）
+const FEED_URL =
+  `https://spreadsheets.google.com/feeds/list/${SHEET_ID}/${GID}/public/values?alt=json`;
 
-  if (s.indexOf('T') === -1 && s.indexOf(' ') !== -1) {
-    s = s.replace(' ', 'T');
-  }
+fetch(FEED_URL)
+  .then(r => r.json())
+  .then(json => {
+    const entries = json.feed?.entry;
+    if (!entries || entries.length === 0) return;
 
-  if (s.indexOf('Z') === -1 && !/[+\-]\d\d:\d\d$/.test(s)) {
-    s = s + '+09:00';
-  }
+    // とりあえず先頭1件だけ表示（正しさは後回し）
+    const e = entries[0];
+    const title = e['gsx$eventtitle']?.$t || '（タイトル不明）';
+    const start = e['gsx$starttime']?.$t || '';
+    const end   = e['gsx$endtime']?.$t || '';
 
-  var d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-/* ===============================
- * メイン処理
- * =============================== */
-var calendarId = getParam('calendar_id');
-if (!calendarId) {
-  document.getElementById('status').innerHTML =
-    '<div class="error">calendar_id が指定されていません</div>';
-} else {
-  fetchReservations(calendarId);
-}
-
-function fetchReservations(calendarId) {
-  var url =
-    'https://spreadsheets.google.com/feeds/list/' +
-    SPREADSHEET_ID +
-    '/' + SHEET_GID +
-    '/public/values?alt=json';
-
-  fetch(url)
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-      var rows = data.feed.entry || [];
-      var reservations = rows.map(function(e) {
-        return {
-          calendar_id: e['gsx$calendar_id'] && e['gsx$calendar_id'].$t,
-          job_code: e['gsx$job_code'] && e['gsx$job_code'].$t,
-          job_name: e['gsx$job_name'] && e['gsx$job_name'].$t,
-          start_time: e['gsx$start_time'] && e['gsx$start_time'].$t,
-          end_time: e['gsx$end_time'] && e['gsx$end_time'].$t,
-          is_all_day: e['gsx$is_all_day'] && e['gsx$is_all_day'].$t,
-          updated_at: e['gsx$updated_at'] && e['gsx$updated_at'].$t
-        };
-      });
-
-      var current = pickCurrentReservation(reservations, calendarId);
-      render(current);
-    })
-    .catch(function(err) {
-      document.getElementById('status').innerHTML =
-        '<div class="error">取得エラー: ' + err + '</div>';
-    });
-}
-
-function pickCurrentReservation(list, calendarId) {
-  var now = new Date();
-
-  for (var i = 0; i < list.length; i++) {
-    var r = list[i];
-    if (r.calendar_id !== calendarId) continue;
-
-    var start = toDate(r.start_time);
-    var end = toDate(r.end_time);
-
-    if (!start || !end) continue;
-
-    var isAllDay =
-      r.is_all_day === true ||
-      r.is_all_day === 'TRUE' ||
-      r.is_all_day === 'true' ||
-      r.is_all_day === 1 ||
-      r.is_all_day === '1';
-
-    if (isAllDay) {
-      end = new Date(end.getTime() - 24 * 60 * 60 * 1000);
-    }
-
-    if (start <= now && now <= end) {
-      return r;
-    }
-  }
-  return null;
-}
-
-function render(r) {
-  var el = document.getElementById('status');
-  if (!r) {
-    el.innerHTML = '<div class="error">現在有効な予約が見つかりません</div>';
-    return;
-  }
-
-  el.innerHTML =
-    '<div class="block"><span class="label">業務コード:</span>' +
-    '<span class="value">' + r.job_code + '</span></div>' +
-    '<div class="block"><span class="label">業務名:</span>' +
-    '<span class="value">' + r.job_name + '</span></div>' +
-    '<div class="block"><span class="label">開始:</span>' +
-    '<span class="value">' + r.start_time + '</span></div>' +
-    '<div class="block"><span class="label">終了:</span>' +
-    '<span class="value">' + r.end_time + '</span></div>';
-}
+    titleEl.textContent = title;
+    timeEl.textContent  = start && end ? `${start} ～ ${end}` : '（時刻未取得）';
+  })
+  .catch(err => {
+    // 何もしない。画面は初期表示のまま。
+    console.warn('予約取得失敗（無視）', err);
+  });
 </script>
-
-</body>
-</html>
