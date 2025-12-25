@@ -75,6 +75,34 @@
       return isNaN(d.getTime()) ? null : d;
     }
 
+    function pickCurrentReservation(reservations) {
+      if (!reservations || !reservations.length) return null;
+    
+      var now = new Date();
+    
+      for (var i = 0; i < reservations.length; i++) {
+        var r = reservations[i];
+    
+        var start = toDate(r.start_time);
+        var end   = toDate(r.end_time);
+    
+        if (!start || !end) continue;
+    
+        // 終日イベントは end が排他的なので 1日引く
+        if (r.is_all_day === true || r.is_all_day === 'TRUE') {
+          var endMinus1 = new Date(end.getTime());
+          endMinus1.setDate(endMinus1.getDate() - 1);
+          end = endMinus1;
+        }
+    
+        if (start <= now && now <= end) {
+          return r;
+        }
+      }
+    
+      return null;
+    }
+    
     function isArray(v) {
       return Object.prototype.toString.call(v) === '[object Array]';
     }
@@ -229,9 +257,13 @@
           return;
         }
 
-        var reservation =
-          (data && data.reservation)
-          || (data && isArray(data.reservations) && data.reservations.length ? data.reservations[0] : null);
+        var reservation = null;
+        
+        if (data && data.reservation) {
+          reservation = data.reservation;
+        } else if (data && isArray(data.reservations)) {
+          reservation = pickCurrentReservation(data.reservations);
+        }
 
         var usageState = (data && (data.usage_state || data.usageState)) || null;
 
