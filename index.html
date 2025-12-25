@@ -1,100 +1,163 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>社用車 利用実績（入口）</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>社用車 利用状況</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 1em;
+    }
+    .label {
+      font-weight: bold;
+    }
+    .value {
+      margin-left: 0.5em;
+    }
+    .block {
+      margin-bottom: 0.8em;
+    }
+    .error {
+      color: red;
+    }
+  </style>
 </head>
+
 <body>
+
 <h2>社用車 利用状況</h2>
 
-<div id="status">読込中...</div>
-<div id="result"></div>
+<div id="status">読み込み中...</div>
 
 <script>
 /* ===============================
-   設定
-================================ */
-const RESERVATION_SHEET_ID = '1wcrXfS43vpdhTrMtgBQufpXwAps7PF86mcoJsVHYt6s';
-const RESERVATION_GID      = '0'; // ← 実際の gid に合わせる
-const FEED_URL = `https://spreadsheets.google.com/feeds/list/${RESERVATION_SHEET_ID}/${RESERVATION_GID}/public/values?alt=json`;
+ * 設定
+ * =============================== */
+var SPREADSHEET_ID = '1wcrXfS43vpdhTrMtgBQufpXwAps7PF86mcoJsVHYt6s'; // 予約（Log）シート
+var SHEET_GID = 'od6'; // 通常は od6
 
 /* ===============================
-   URL パラメータ
-================================ */
-const params = new URLSearchParams(location.search);
-const calendarId = params.get('calendar_id');
+ * ユーティリティ
+ * =============================== */
+function getParam(name) {
+  var m = location.search.match(new RegExp('[?&]' + name + '=([^&]+)'));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function toDate(v) {
+  if (!v) return null;
+
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return isNaN(v.getTime()) ? null : v;
+  }
+
+  var s = String(v);
+
+  if (s.indexOf('T') === -1 && s.indexOf(' ') !== -1) {
+    s = s.replace(' ', 'T');
+  }
+
+  if (s.indexOf('Z') === -1 && !/[+\-]\d\d:\d\d$/.test(s)) {
+    s = s + '+09:00';
+  }
+
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
 
 /* ===============================
-   メイン
-================================ */
-fetch(FEED_URL)
-  .then(r => r.json())
-  .then(json => {
-    const rows = json.feed.entry.map(e => ({
-      calendar_id: e['gsx$calendarid']?.$t ?? '',
-      title:       e['gsx$eventtitle']?.$t ?? '',
-      is_deleted:  e['gsx$isdeleted']?.$t ?? 'FALSE',
-      is_all_day:  e['gsx$isallday']?.$t ?? 'FALSE',
-      start_time:  e['gsx$starttime']?.$t ?? '',
-      end_time:    e['gsx$endtime']?.$t ?? '',
-      start_date:  e['gsx$startdate']?.$t ?? '',
-      end_date:    e['gsx$enddate']?.$t ?? ''
-    }));
+ * メイン処理
+ * =============================== */
+var calendarId = getParam('calendar_id');
+if (!calendarId) {
+  document.getElementById('status').innerHTML =
+    '<div class="error">calendar_id が指定されていません</div>';
+} else {
+  fetchReservations(calendarId);
+}
 
-    render(rows);
-  })
-  .catch(err => {
-    document.getElementById('status').textContent = '取得エラー';
-    console.error(err);
-  });
+function fetchReservations(calendarId) {
+  var url =
+    'https://spreadsheets.google.com/feeds/list/' +
+    SPREADSHEET_ID +
+    '/' + SHEET_GID +
+    '/public/values?alt=json';
 
-/* ===============================
-   表示ロジック
-================================ */
-function render(rows) {
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  fetch(url)
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var rows = data.feed.entry || [];
+      var reservations = rows.map(function(e) {
+        return {
+          calendar_id: e['gsx$calendar_id'] && e['gsx$calendar_id'].$t,
+          job_code: e['gsx$job_code'] && e['gsx$job_code'].$t,
+          job_name: e['gsx$job_name'] && e['gsx$job_name'].$t,
+          start_time: e['gsx$start_time'] && e['gsx$start_time'].$t,
+          end_time: e['gsx$end_time'] && e['gsx$end_time'].$t,
+          is_all_day: e['gsx$is_all_day'] && e['gsx$is_all_day'].$t,
+          updated_at: e['gsx$updated_at'] && e['gsx$updated_at'].$t
+        };
+      });
 
-  const filtered = rows.filter(r => {
-    // 削除済み除外
-    if (r.is_deleted !== 'FALSE') return false;
+      var current = pickCurrentReservation(reservations, calendarId);
+      render(current);
+    })
+    .catch(function(err) {
+      document.getElementById('status').innerHTML =
+        '<div class="error">取得エラー: ' + err + '</div>';
+    });
+}
 
-    // calendar_id 完全一致
-    if (String(r.calendar_id) !== String(calendarId)) return false;
+function pickCurrentReservation(list, calendarId) {
+  var now = new Date();
 
-    // 終日
-    if (r.is_all_day === 'TRUE') {
-      return r.start_date <= today && today <= r.end_date;
+  for (var i = 0; i < list.length; i++) {
+    var r = list[i];
+    if (r.calendar_id !== calendarId) continue;
+
+    var start = toDate(r.start_time);
+    var end = toDate(r.end_time);
+
+    if (!start || !end) continue;
+
+    var isAllDay =
+      r.is_all_day === true ||
+      r.is_all_day === 'TRUE' ||
+      r.is_all_day === 'true' ||
+      r.is_all_day === 1 ||
+      r.is_all_day === '1';
+
+    if (isAllDay) {
+      end = new Date(end.getTime() - 24 * 60 * 60 * 1000);
     }
 
-    // 非終日
-    const start = new Date(r.start_time);
-    const end   = new Date(r.end_time);
-    if (isNaN(start) || isNaN(end)) return false;
+    if (start <= now && now <= end) {
+      return r;
+    }
+  }
+  return null;
+}
 
-    return now >= start && now <= end;
-  });
-
-  const status = document.getElementById('status');
-  const result = document.getElementById('result');
-
-  if (filtered.length === 0) {
-    status.textContent = '現在有効な予約はありません';
+function render(r) {
+  var el = document.getElementById('status');
+  if (!r) {
+    el.innerHTML = '<div class="error">現在有効な予約が見つかりません</div>';
     return;
   }
 
-  const r = filtered[0];
-  status.textContent = '予約中';
-
-  result.innerHTML = `
-    <p><strong>${r.title}</strong></p>
-    <p>${r.is_all_day === 'TRUE'
-      ? `終日（${r.start_date} ～ ${r.end_date}）`
-      : `${r.start_time} ～ ${r.end_time}`
-    }</p>
-  `;
+  el.innerHTML =
+    '<div class="block"><span class="label">業務コード:</span>' +
+    '<span class="value">' + r.job_code + '</span></div>' +
+    '<div class="block"><span class="label">業務名:</span>' +
+    '<span class="value">' + r.job_name + '</span></div>' +
+    '<div class="block"><span class="label">開始:</span>' +
+    '<span class="value">' + r.start_time + '</span></div>' +
+    '<div class="block"><span class="label">終了:</span>' +
+    '<span class="value">' + r.end_time + '</span></div>';
 }
 </script>
+
 </body>
 </html>
