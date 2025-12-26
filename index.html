@@ -7,10 +7,10 @@
   <style>
     body { font-family: sans-serif; margin: 16px; }
     h1 { font-size: 22px; margin-bottom: 12px; }
-    .box { border: 1px solid #ccc; padding: 12px; }
-    .job-code { font-weight: bold; }
-    .time { margin-top: 6px; }
+    .box { border: 1px solid #ccc; padding: 12px; margin-bottom: 12px; }
     .warn { color: red; font-weight: bold; }
+    .label { font-weight: bold; }
+    pre { font-size: 12px; background: #f7f7f7; padding: 8px; }
   </style>
 </head>
 <body>
@@ -20,23 +20,74 @@
 
 <script>
 /* ===============================
-   JSONP callback（必須）
+   JSONP callback
    =============================== */
 function handleReservation(data) {
   var content = document.getElementById('content');
+  var now = new Date();
 
-  // データ確認用（まずは必ず見えることを優先）
-  content.innerHTML =
+  // ---- DEBUG 表示（必ず残す）----
+  var debugHtml =
     '<div class="box">'
-    + '<div class="job-code">DEBUG: JSONP受信成功</div>'
-    + '<pre style="white-space:pre-wrap;font-size:12px;">'
-    + JSON.stringify(data, null, 2)
-    + '</pre>'
+    + '<div class="label">DEBUG: JSONP受信成功</div>'
+    + '<pre>' + JSON.stringify(data, null, 2) + '</pre>'
     + '</div>';
+
+  // ---- 有効な予約を1件抽出 ----
+  var active = null;
+
+  if (data.reservations && data.reservations.length > 0) {
+    for (var i = 0; i < data.reservations.length; i++) {
+      var r = data.reservations[i];
+
+      // 終日予約
+      if (r.is_all_day === true) {
+        // 終日は「今日にかかっていれば有効」とする
+        active = r;
+        break;
+      }
+
+      // 時刻指定予約
+      if (r.start_time && r.end_time) {
+        var start = new Date(r.start_time);
+        var end   = new Date(r.end_time);
+
+        if (start <= now && now < end) {
+          active = r;
+          break;
+        }
+      }
+    }
+  }
+
+  // ---- 表示 ----
+  var viewHtml = '<div class="box">';
+
+  if (!active) {
+    viewHtml += '<div class="warn">現在有効な予約はありません</div>';
+  } else {
+    viewHtml += '<div><span class="label">業務コード：</span>' + (active.job_code || '不明') + '</div>';
+    viewHtml += '<div><span class="label">業務名：</span>' + (active.job_name || '不明') + '</div>';
+
+    if (active.is_all_day === true) {
+      viewHtml += '<div><span class="label">時間：</span>終日</div>';
+    } else {
+      viewHtml += '<div><span class="label">開始：</span>' + active.start_time + '</div>';
+      viewHtml += '<div><span class="label">終了：</span>' + active.end_time + '</div>';
+    }
+
+    viewHtml += '<div><span class="label">場所：</span>' + (active.location || '') + '</div>';
+    viewHtml += '<div><span class="label">状態：</span>' + (data.usage_state || '') + '</div>';
+  }
+
+  viewHtml += '</div>';
+
+  // ---- 反映 ----
+  content.innerHTML = debugHtml + viewHtml;
 }
 
 /* ===============================
-   JSONP 読み込み（XHR禁止）
+   JSONP 読み込み
    =============================== */
 (function () {
   var params = new URLSearchParams(window.location.search);
