@@ -34,31 +34,75 @@ function handleReservation(data) {
     + '</div>';
 
   // ---- 有効な予約を1件抽出 ----
-  var active = null;
+// ---- 有効な予約を1件抽出（正しい判定）----
+var active = null;
 
-  if (data.reservations && data.reservations.length > 0) {
-    for (var i = 0; i < data.reservations.length; i++) {
-      var r = data.reservations[i];
+function parseDateOnly(yyyy_mm_dd) {
+  // "2025-12-26" をローカル日付として扱う（UTCズレ回避）
+  var m = String(yyyy_mm_dd).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
+}
 
-      // 終日予約
-      if (r.is_all_day === true) {
-        // 終日は「今日にかかっていれば有効」とする
-        active = r;
+function startOfTodayLocal(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+var reservations = (data && data.reservations) ? data.reservations : [];
+var nowTime = now.getTime();
+var today0 = startOfTodayLocal(now);                 // 今日 00:00
+var today0Time = today0.getTime();
+
+var candidateTimed = null;
+var candidateAllDay = null;
+
+// 1) 時刻指定で「今進行中」を探す
+for (var i = 0; i < reservations.length; i++) {
+  var r = reservations[i];
+  if (r && r.is_all_day === false && r.start_time && r.end_time) {
+    var st = new Date(r.start_time);
+    var et = new Date(r.end_time);
+    if (!isNaN(st.getTime()) && !isNaN(et.getTime())) {
+      if (st.getTime() <= nowTime && nowTime < et.getTime()) {
+        candidateTimed = r;
         break;
       }
+    }
+  }
+}
 
-      // 時刻指定予約
-      if (r.start_time && r.end_time) {
-        var start = new Date(r.start_time);
-        var end   = new Date(r.end_time);
+// 2) 終日で「今日にかかっている」を探す（endは排他）
+if (!candidateTimed) {
+  for (var j = 0; j < reservations.length; j++) {
+    var a = reservations[j];
+    if (a && a.is_all_day === true && a.start_time && a.end_time) {
+      var sd = parseDateOnly(a.start_time);
+      var ed = parseDateOnly(a.end_time);
 
-        if (start <= now && now < end) {
-          active = r;
+      // sd/ed が Date型で来る可能性も一応吸収
+      if (!sd && Object.prototype.toString.call(a.start_time) === '[object Date]') {
+        sd = startOfTodayLocal(a.start_time);
+      }
+      if (!ed && Object.prototype.toString.call(a.end_time) === '[object Date]') {
+        ed = startOfTodayLocal(a.end_time);
+      }
+
+      if (sd && ed) {
+        var sdTime = sd.getTime();
+        var edTime = ed.getTime();
+
+        // start <= today < end（end排他）
+        if (sdTime <= today0Time && today0Time < edTime) {
+          candidateAllDay = a;
           break;
         }
       }
     }
   }
+}
+
+active = candidateTimed || candidateAllDay;
+
 
   // ---- 表示 ----
   var viewHtml = '<div class="box">';
