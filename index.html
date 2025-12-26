@@ -105,25 +105,77 @@ active = candidateTimed || candidateAllDay;
 
 
   // ---- 表示 ----
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+  
+  function formatDateOnly(yyyy_mm_dd) {
+    // "2025-12-26" -> "2025-12-26"
+    // （ここではそのまま表示。好みで "2025/12/26" に変えてもOK）
+    return esc(yyyy_mm_dd);
+  }
+  
+  function formatDateTime(isoOrText) {
+    // "2025-12-22T14:30:00+09:00" のようなISOは Date で整形表示
+    // それ以外は文字列をそのまま出す
+    var s = String(isoOrText == null ? '' : isoOrText).trim();
+    if (!s) return '(不明)';
+  
+    // ISOっぽいなら Date にしてローカルで見やすく（ガラホでも崩れにくい）
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+      var d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        var y = d.getFullYear();
+        var m = ('0' + (d.getMonth() + 1)).slice(-2);
+        var dd = ('0' + d.getDate()).slice(-2);
+        var hh = ('0' + d.getHours()).slice(-2);
+        var mm = ('0' + d.getMinutes()).slice(-2);
+        return y + '-' + m + '-' + dd + ' ' + hh + ':' + mm;
+      }
+    }
+    return esc(s);
+  }
+  
   var viewHtml = '<div class="box">';
-
+  
   if (!active) {
     viewHtml += '<div class="warn">現在有効な予約はありません</div>';
   } else {
-    viewHtml += '<div><span class="label">業務コード：</span>' + (active.job_code || '不明') + '</div>';
-    viewHtml += '<div><span class="label">業務名：</span>' + (active.job_name || '不明') + '</div>';
-
-    if (active.is_all_day === true) {
-      viewHtml += '<div><span class="label">時間：</span>終日</div>';
-    } else {
-      viewHtml += '<div><span class="label">開始：</span>' + active.start_time + '</div>';
-      viewHtml += '<div><span class="label">終了：</span>' + active.end_time + '</div>';
+    // 予約内容（raw title を優先）
+    var title = active.title_raw || '';
+    if (!title) {
+      // title_raw が空のときだけ job_code / job_name で補う
+      var jc = active.job_code || '';
+      var jn = active.job_name || '';
+      title = (jc && jn) ? (jc + '｜' + jn) : (jc || jn || '');
     }
-
-    viewHtml += '<div><span class="label">場所：</span>' + (active.location || '') + '</div>';
-    viewHtml += '<div><span class="label">状態：</span>' + (data.usage_state || '') + '</div>';
+  
+    viewHtml += '<div><span class="label">予約内容：</span>' + esc(title || '（不明）') + '</div>';
+  
+    // 業務コード／業務名（必要なら残す）
+    viewHtml += '<div><span class="label">業務コード：</span>' + esc(active.job_code || '不明') + '</div>';
+    viewHtml += '<div><span class="label">業務名：</span>' + esc(active.job_name || '不明') + '</div>';
+  
+    // 開始・終了
+    if (active.is_all_day === true) {
+      viewHtml += '<div><span class="label">区分：</span>終日</div>';
+      viewHtml += '<div><span class="label">開始日：</span>' + formatDateOnly(active.start_time || '(不明)') + '</div>';
+      viewHtml += '<div><span class="label">終了日：</span>' + formatDateOnly(active.end_time || '(不明)') + '</div>';
+    } else {
+      viewHtml += '<div><span class="label">開始：</span>' + formatDateTime(active.start_time) + '</div>';
+      viewHtml += '<div><span class="label">終了：</span>' + formatDateTime(active.end_time) + '</div>';
+    }
+  
+    viewHtml += '<div><span class="label">場所：</span>' + esc(active.location || '') + '</div>';
+  
+    // ★ 状態（usage_state）は表示しない（要求どおり削除）
   }
-
+  
   viewHtml += '</div>';
 
   // ---- 反映 ----
