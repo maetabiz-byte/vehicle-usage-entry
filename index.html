@@ -20,282 +20,165 @@
 </head>
 <body>
 
-  <h1>社用車 利用</h1>
+<h1>社用車 利用</h1>
 
-  <div id="content"></div>
+<div id="content"></div>
 
-  <script>
-    var WEBAPP_URL =
-      'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
+<script>
+var WEBAPP_URL =
+  'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
 
-    function getParam(name) {
-      var query = window.location.search;
-      if (!query) return null;
-      if (query.charAt(0) === '?') query = query.substring(1);
+function getParam(name) {
+  var query = window.location.search;
+  if (!query) return null;
+  if (query.charAt(0) === '?') query = query.substring(1);
 
-      var vars = query.split('&');
-      for (var i = 0; i < vars.length; i++) {
-        var pair = vars[i].split('=');
-        var key = decodeURIComponent(pair[0] || '');
-        if (key === name) {
-          return decodeURIComponent(pair[1] || '');
-        }
-      }
-      return null;
+  var vars = query.split('&');
+  for (var i = 0; i < vars.length; i++) {
+    var pair = vars[i].split('=');
+    var key = decodeURIComponent(pair[0] || '');
+    if (key === name) {
+      return decodeURIComponent(pair[1] || '');
+    }
+  }
+  return null;
+}
+
+function zeroPad2(n) {
+  n = String(n);
+  return (n.length === 1) ? ('0' + n) : n;
+}
+
+function md(d) {
+  return zeroPad2(d.getMonth() + 1) + '/' + zeroPad2(d.getDate());
+}
+
+function hm(d) {
+  return zeroPad2(d.getHours()) + ':' + zeroPad2(d.getMinutes());
+}
+
+/* ===== Date変換（★ここが本修正） ===== */
+function toDate(v) {
+  if (!v) return null;
+
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return isNaN(v.getTime()) ? null : v;
+  }
+
+  var s = String(v);
+
+  // ★ 終日（YYYY-MM-DD）対策：時刻を明示
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    s = s + 'T00:00:00';
+  }
+
+  if (s.indexOf('T') === -1 && s.indexOf(' ') !== -1) {
+    s = s.replace(' ', 'T');
+  }
+
+  if (s.indexOf('Z') === -1 && !/[+\-]\d\d:\d\d$/.test(s)) {
+    s = s + '+09:00';
+  }
+
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function pickCurrentReservation(reservations) {
+  if (!reservations || !reservations.length) return null;
+
+  var now = new Date();
+
+  for (var i = 0; i < reservations.length; i++) {
+    var r = reservations[i];
+
+    var start = toDate(r.start_time);
+    var end   = toDate(r.end_time);
+    if (!start || !end) continue;
+
+    if (r.is_all_day === true || r.is_all_day === 'TRUE') {
+      var endMinus1 = new Date(end.getTime());
+      endMinus1.setDate(endMinus1.getDate() - 1);
+      end = endMinus1;
     }
 
-    function zeroPad2(n) {
-      n = String(n);
-      return (n.length === 1) ? ('0' + n) : n;
+    if (start <= now && now <= end) {
+      return r;
     }
+  }
+  return null;
+}
 
-    function ymd(d) {
-      var y = d.getFullYear();
-      var m = zeroPad2(d.getMonth() + 1);
-      var day = zeroPad2(d.getDate());
-      return y + '-' + m + '-' + day;
-    }
+function formatReservationForDisplay(r) {
+  if (!r) return null;
 
-    function md(d) {
-      var m = zeroPad2(d.getMonth() + 1);
-      var day = zeroPad2(d.getDate());
-      return m + '/' + day;
-    }
+  var startD = toDate(r.start_time);
+  var endD   = toDate(r.end_time);
 
-    function hm(d) {
-      var h = zeroPad2(d.getHours());
-      var m = zeroPad2(d.getMinutes());
-      return h + ':' + m;
-    }
+  if (!startD || !endD) {
+    return { startText: '(不明)', endText: '(不明)' };
+  }
 
-    // ISO/Date文字列を Date に変換（失敗したら null）
-    function toDate(v) {
-      if (!v) return null;
-    
-      // すでに Date ならそのまま
-      if (Object.prototype.toString.call(v) === '[object Date]') {
-        return isNaN(v.getTime()) ? null : v;
-      }
-    
-      var s = String(v);
-    
-      // "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SS+09:00"
-      // （ガラホで Date.parse が落ちやすい形式を救済）
-      if (s.indexOf('T') === -1 && s.indexOf(' ') !== -1) {
-        s = s.replace(' ', 'T');
-      }
-    
-      // タイムゾーンが無い場合は +09:00 を付与（Asia/Tokyo前提）
-      // すでに "Z" や "+09:00" のようなTZがあれば付与しない
-      if (s.indexOf('Z') === -1 && !/[+\-]\d\d:\d\d$/.test(s)) {
-        s = s + '+09:00';
-      }
-    
-      var d = new Date(s);
-      return isNaN(d.getTime()) ? null : d;
-    }
-
-
-    function pickCurrentReservation(reservations) {
-      if (!reservations || !reservations.length) return null;
-    
-      var now = new Date();
-    
-      for (var i = 0; i < reservations.length; i++) {
-        var r = reservations[i];
-    
-        var start = toDate(r.start_time);
-        var end   = toDate(r.end_time);
-    
-        if (!start || !end) continue;
-    
-        // 終日イベントは end が排他的なので 1日引く
-        if (r.is_all_day === true || r.is_all_day === 'TRUE') {
-          var endMinus1 = new Date(end.getTime());
-          endMinus1.setDate(endMinus1.getDate() - 1);
-          end = endMinus1;
-        }
-    
-        if (start <= now && now <= end) {
-          return r;
-        }
-      }
-    
-      return null;
-    }
-    
-    function isArray(v) {
-      return Object.prototype.toString.call(v) === '[object Array]';
-    }
-
-    // JSON または JSONP を受ける（ES5 / ガラホ対応版）
-    function fetchDoGet(calendarId, callback) {
-      var url = WEBAPP_URL + '?calendar_id=' + encodeURIComponent(calendarId);
-      var xhr = new XMLHttpRequest();
-
-      xhr.open('GET', url, true);
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState !== 4) return;
-
-        if (xhr.status !== 200) {
-          callback({ error: 'HTTP ' + xhr.status });
-          return;
-        }
-
-        var text = xhr.responseText;
-
-        // まず JSON として試す
-        try {
-          callback(JSON.parse(text));
-          return;
-        } catch (e) {}
-
-        // JSONP の可能性：callbackName({...});
-        var firstParen = text.indexOf('(');
-        var lastParen = text.lastIndexOf(')');
-        if (firstParen !== -1 && lastParen !== -1 && lastParen > firstParen) {
-          try {
-            callback(JSON.parse(text.substring(firstParen + 1, lastParen)));
-            return;
-          } catch (e2) {}
-        }
-
-        callback({ error: 'doGet response parse failed', raw: text });
-      };
-
-      xhr.send(null);
-    }
-
-    // 終日イベント：表示用に end を 1日引く（データは触らない）
-    function formatReservationForDisplay(r) {
-      var isAllDay = !!r.is_all_day || r.is_all_day === 'TRUE';
-
-      // GAS 側の列名に揺れがあっても拾えるようにする
-      var startRaw = r.start_time || r.start || r.startTime || null;
-      var endRaw   = r.end_time   || r.end   || r.endTime   || null;
-
-      var startD = toDate(startRaw);
-      var endD   = toDate(endRaw);
-
-      if (!startD || !endD) {
-        return {
-          isAllDay: isAllDay,
-          startText: '(不明)',
-          endText: '(不明)'
-        };
-      }
-
-      if (isAllDay) {
-        // 表示だけ end-1日
-        var endMinus1 = new Date(endD.getTime());
-        endMinus1.setDate(endMinus1.getDate() - 1);
-
-        return {
-          isAllDay: isAllDay,
-          startText: md(startD) + '（終日）',
-          endText: md(endMinus1) + '（終日）'
-        };
-      }
-
-      return {
-        isAllDay: isAllDay,
-        startText: md(startD) + ' ' + hm(startD),
-        endText: md(endD) + ' ' + hm(endD)
-      };
-    }
-
-    function buildHtml(args) {
-      var calendarId = args.calendarId;
-      var reservation = args.reservation;
-      var usageState = args.usageState;
-
-      var jobCode =
-        (reservation && (reservation.parsed_job_code || reservation.job_code || reservation.jobCode)) || '';
-
-      var jobName =
-        (reservation && (reservation.parsed_job_name || reservation.job_name || reservation.jobName || reservation.event_title_raw)) || '';
-
-      var location =
-        (reservation && (reservation.event_location || reservation.location)) || '';
-
-      var timeDisp = reservation ? formatReservationForDisplay(reservation) : null;
-
-      var stateNote = usageState
-        ? '<div class="muted">状態：' + usageState + '</div>'
-        : '<div class="muted">状態：未判定（予約情報のみ）</div>';
-
-      // 導線：usage_state が無い場合は「開始入力へ」だけにして安全側
-      var showStartBtn = (!usageState || usageState === 'not_started' || usageState === 'completed');
-      var showEndBtn   = (usageState === 'in_progress');
-
-      var btnStart = showStartBtn
-        ? '<button onclick="goStart()">開始入力へ</button>'
-        : '';
-
-      var btnEnd = showEndBtn
-        ? '<button onclick="goEnd()">訪問／終了へ</button>'
-        : '';
-
-      var html = ''
-        + '<div class="box">'
-        +   '<div class="job-code">' + (jobCode || '(業務コード不明)') + '</div>'
-        +   '<div class="job-name">' + (jobName || '(業務名不明)') + '</div>'
-        +   '<div class="time">開始：' + (timeDisp ? timeDisp.startText : '(不明)') + '</div>'
-        +   '<div class="time">終了：' + (timeDisp ? timeDisp.endText : '(不明)') + '</div>'
-        +   '<div class="location">場所：' + (location || '(不明)') + '</div>'
-        +   stateNote
-        + '</div>'
-        + '<div class="actions">'
-        +   btnStart
-        +   btnEnd
-        + '</div>';
-
-      return html;
-    }
-
-    function goStart() {
-      var calendarId = getParam('calendar_id');
-      window.location.href = 'start.html?calendar_id=' + encodeURIComponent(calendarId);
-    }
-
-    function goEnd() {
-      var calendarId = getParam('calendar_id');
-      window.location.href = 'end.html?calendar_id=' + encodeURIComponent(calendarId);
-    }
-
-    window.onload = function () {
-      var content = document.getElementById('content');
-      var calendarId = getParam('calendar_id');
-
-      if (!calendarId) {
-        content.innerHTML = '<div class="warn">calendar_id がありません。</div>';
-        return;
-      }
-
-      fetchDoGet(calendarId, function (data) {
-        if (data && data.error) {
-          content.innerHTML = '<div class="warn">取得エラー：' + data.error + '</div>';
-          return;
-        }
-
-        var reservation = null;
-        
-        if (data && data.reservation) {
-          reservation = data.reservation;
-        } else if (data && isArray(data.reservations)) {
-          reservation = pickCurrentReservation(data.reservations);
-        }
-
-        var usageState = (data && (data.usage_state || data.usageState)) || null;
-
-        content.innerHTML = buildHtml({
-          calendarId: calendarId,
-          reservation: reservation,
-          usageState: usageState
-        });
-      });
+  if (r.is_all_day === true || r.is_all_day === 'TRUE') {
+    var endMinus1 = new Date(endD.getTime());
+    endMinus1.setDate(endMinus1.getDate() - 1);
+    return {
+      startText: md(startD) + '（終日）',
+      endText: md(endMinus1) + '（終日）'
     };
-  </script>
+  }
+
+  return {
+    startText: md(startD) + ' ' + hm(startD),
+    endText: md(endD) + ' ' + hm(endD)
+  };
+}
+
+/* ===== DEBUG（?debug=1 のときだけ表示） ===== */
+function buildDebugHtml(obj) {
+  if (getParam('debug') !== '1') return '';
+  return '<pre style="font-size:12px;white-space:pre-wrap;border:1px solid #ccc;padding:8px;">'
+    + JSON.stringify(obj, null, 2)
+    + '</pre>';
+}
+
+window.onload = function () {
+  var content = document.getElementById('content');
+  var calendarId = getParam('calendar_id');
+
+  if (!calendarId) {
+    content.innerHTML = '<div class="warn">calendar_id がありません。</div>';
+    return;
+  }
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', WEBAPP_URL + '?calendar_id=' + encodeURIComponent(calendarId), true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+
+    var data;
+    try {
+      data = JSON.parse(xhr.responseText);
+    } catch (e) {
+      content.innerHTML = '<div class="warn">レスポンス解析失敗</div>';
+      return;
+    }
+
+    var reservation = pickCurrentReservation(data.reservations || []);
+    var disp = formatReservationForDisplay(reservation);
+
+    content.innerHTML =
+      '<div class="box">'
+      + '<div class="job-code">' + (reservation && reservation.job_code || '(不明)') + '</div>'
+      + '<div class="job-name">' + (reservation && reservation.job_name || '') + '</div>'
+      + '<div class="time">開始：' + (disp ? disp.startText : '(不明)') + '</div>'
+      + '<div class="time">終了：' + (disp ? disp.endText : '(不明)') + '</div>'
+      + '</div>'
+      + buildDebugHtml(data);
+  };
+  xhr.send(null);
+};
+</script>
 
 </body>
 </html>
