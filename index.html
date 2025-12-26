@@ -3,144 +3,84 @@
 <head>
   <meta charset="UTF-8">
   <title>社用車 利用</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 20px;
-    }
-    .box {
-      border: 1px solid #ccc;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .error {
-      color: red;
-      font-weight: bold;
-    }
-    button {
-      width: 100%;
-      padding: 12px;
-      font-size: 16px;
-    }
-    .debug {
-      background: #f7f7f7;
-      font-family: monospace;
-      white-space: pre-wrap;
-    }
+    body { font-family: sans-serif; margin: 16px; }
+    .box { border: 1px solid #ccc; padding: 12px; margin-bottom: 12px; }
+    .error { color: red; font-weight: bold; }
+    .debug { background: #f7f7f7; white-space: pre-wrap; font-family: monospace; }
   </style>
 </head>
 <body>
 
 <h1>社用車 利用</h1>
 
-<div id="debug" class="box debug"></div>
-<div id="reservationArea"></div>
+<div id="debug" class="box debug">DEBUG: 初期状態</div>
+<div id="result" class="box">予約取得中…</div>
 
 <script>
-/* ===============================
- * 設定
- * =============================== */
-const API_URL = '＜あなたのGASのURL＞';
-const RESERVE_OFFSET_MIN = 30; // ★ 予約開始の30分前から有効扱い
+/* ========= 設定 ========= */
+const GAS_URL =
+  "https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec";
 
-/* ===============================
- * ユーティリティ
- * =============================== */
-function toDate(str) {
-  return new Date(str);
+/* ========= ユーティリティ ========= */
+function getCalendarId() {
+  return new URLSearchParams(location.search).get("calendar_id");
 }
 
-function formatDate(d) {
-  return d.toISOString().slice(0, 10);
-}
-
-function formatDateTime(d) {
-  return d.toISOString().slice(0, 16).replace('T', ' ');
-}
-
-/* ===============================
- * 予約有効判定
- * =============================== */
-function isActiveReservation(res, now) {
-  let start = toDate(res.start_time);
-  let end   = toDate(res.end_time);
-
-  // 終日予約補正（Google Calendar仕様）
-  if (res.is_all_day) {
-    end.setDate(end.getDate() - 1);
+/* ========= JSONP 呼び出し ========= */
+function loadReservation(calendarId) {
+  if (!calendarId) {
+    document.getElementById("result").innerHTML =
+      '<div class="error">calendar_id がありません</div>';
+    return;
   }
 
-  // ★ 開始30分前から有効
-  start = new Date(start.getTime() - RESERVE_OFFSET_MIN * 60000);
+  // 既存 script を除去
+  const old = document.getElementById("jsonp-script");
+  if (old) old.remove();
 
-  return start <= now && now <= end;
+  const s = document.createElement("script");
+  s.id = "jsonp-script";
+  s.src =
+    GAS_URL +
+    "?calendar_id=" + encodeURIComponent(calendarId) +
+    "&callback=handleReservation";
+
+  document.body.appendChild(s);
 }
 
-/* ===============================
- * 表示
- * =============================== */
-function renderReservation(res) {
-  let start = toDate(res.start_time);
-  let end   = toDate(res.end_time);
+/* ========= GAS から呼ばれるコールバック ========= */
+function handleReservation(data) {
+  // デバッグ表示
+  document.getElementById("debug").textContent =
+    "DEBUG: JSONP受信成功\n\n" + JSON.stringify(data, null, 2);
 
-  if (res.is_all_day) {
-    end.setDate(end.getDate() - 1);
+  if (!data || !data.reservations || data.reservations.length === 0) {
+    document.getElementById("result").innerHTML =
+      '<div class="error">予約が見つかりません</div>';
+    return;
   }
 
-  let html = `
-    <div class="box">
-      <div><b>予約内容：</b>${res.job_code} ${res.job_name}</div>
-      <div><b>業務コード：</b>${res.job_code}</div>
-      <div><b>業務名：</b>${res.job_name}</div>
-      <div><b>開始：</b>${res.is_all_day ? formatDate(start) : formatDateTime(start)}</div>
-      <div><b>終了：</b>${res.is_all_day ? formatDate(end) : formatDateTime(end)}</div>
-      ${res.location ? `<div><b>場所：</b>${res.location}</div>` : ''}
-    </div>
-    <button onclick="alert('開始処理へ')">開始入力へ</button>
-  `;
+  // とりあえず先頭1件を表示（※ここは後でロジックを詰める）
+  const r = data.reservations[0];
 
-  document.getElementById('reservationArea').innerHTML = html;
+  let html = "";
+  html += "<div><b>予約内容：</b>" + (r.title_raw || "") + "</div>";
+  html += "<div><b>業務コード：</b>" + (r.job_code || "") + "</div>";
+  html += "<div><b>業務名：</b>" + (r.job_name || "") + "</div>";
+  html += "<div><b>開始：</b>" + (r.start_time || "") + "</div>";
+  html += "<div><b>終了：</b>" + (r.end_time || "") + "</div>";
+  if (r.location) {
+    html += "<div><b>場所：</b>" + r.location + "</div>";
+  }
+
+  document.getElementById("result").innerHTML = html;
 }
 
-function renderNoReservation() {
-  document.getElementById('reservationArea').innerHTML =
-    '<div class="box error">現在有効な予約はありません</div>';
-}
-
-/* ===============================
- * メイン
- * =============================== */
-fetch(https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec)
-  .then(r => r.json())
-  .then(data => {
-    document.getElementById('debug').textContent =
-      'DEBUG: JSONP受信成功\n\n' + JSON.stringify(data, null, 2);
-
-    if (!data.reservations || data.reservations.length === 0) {
-      renderNoReservation();
-      return;
-    }
-
-    const now = new Date();
-
-    // 有効な予約を抽出
-    const active = data.reservations.filter(r => isActiveReservation(r, now));
-
-    if (active.length === 0) {
-      renderNoReservation();
-      return;
-    }
-
-    // 開始時刻が一番近いものを採用
-    active.sort((a, b) => toDate(a.start_time) - toDate(b.start_time));
-
-    renderReservation(active[0]);
-  })
-  .catch(err => {
-    document.getElementById('reservationArea').innerHTML =
-      `<div class="box error">取得エラー</div>`;
-    console.error(err);
-  });
+/* ========= 起動 ========= */
+const calendarId = getCalendarId();
+loadReservation(calendarId);
 </script>
 
 </body>
