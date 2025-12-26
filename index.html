@@ -8,8 +8,8 @@
     body { font-family: sans-serif; margin: 16px; }
     h1 { font-size: 22px; margin-bottom: 12px; }
     .box { border: 1px solid #ccc; padding: 12px; margin-bottom: 12px; }
-    .warn { color: red; font-weight: bold; }
     .label { font-weight: bold; }
+    .warn { color: red; font-weight: bold; }
     pre { font-size: 12px; background: #f7f7f7; padding: 8px; }
   </style>
 </head>
@@ -26,159 +26,100 @@ function handleReservation(data) {
   var content = document.getElementById('content');
   var now = new Date();
 
-  // ---- DEBUG 表示（必ず残す）----
+  /* ---------- DEBUG（残す） ---------- */
   var debugHtml =
     '<div class="box">'
-    + '<div class="label">DEBUG: JSONP受信成功</div>'
+    + '<div class="label">DEBUG</div>'
     + '<pre>' + JSON.stringify(data, null, 2) + '</pre>'
     + '</div>';
 
-  // ---- 有効な予約を1件抽出 ----
-// ---- 有効な予約を1件抽出（正しい判定）----
-var active = null;
+  /* ---------- 有効な予約を選択 ---------- */
+  var active = null;
 
-function parseDateOnly(yyyy_mm_dd) {
-  // "2025-12-26" をローカル日付として扱う（UTCズレ回避）
-  var m = String(yyyy_mm_dd).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return null;
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
-}
+  function parseDateOnly(s) {
+    var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    return new Date(+m[1], +m[2] - 1, +m[3], 0, 0, 0, 0);
+  }
 
-function startOfTodayLocal(d) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-}
+  var nowTime = now.getTime();
+  var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
 
-var reservations = (data && data.reservations) ? data.reservations : [];
-var nowTime = now.getTime();
-var today0 = startOfTodayLocal(now);                 // 今日 00:00
-var today0Time = today0.getTime();
-
-var candidateTimed = null;
-var candidateAllDay = null;
-
-// 1) 時刻指定で「今進行中」を探す
-for (var i = 0; i < reservations.length; i++) {
-  var r = reservations[i];
-  if (r && r.is_all_day === false && r.start_time && r.end_time) {
-    var st = new Date(r.start_time);
-    var et = new Date(r.end_time);
-    if (!isNaN(st.getTime()) && !isNaN(et.getTime())) {
-      if (st.getTime() <= nowTime && nowTime < et.getTime()) {
-        candidateTimed = r;
+  // 1) 時刻指定で「今」
+  for (var i = 0; i < (data.reservations || []).length; i++) {
+    var r = data.reservations[i];
+    if (!r || r.is_all_day) continue;
+    if (r.start_time && r.end_time) {
+      var st = new Date(r.start_time);
+      var et = new Date(r.end_time);
+      if (!isNaN(st) && !isNaN(et) && st.getTime() <= nowTime && nowTime < et.getTime()) {
+        active = r;
         break;
       }
     }
   }
-}
 
-// 2) 終日で「今日にかかっている」を探す（endは排他）
-if (!candidateTimed) {
-  for (var j = 0; j < reservations.length; j++) {
-    var a = reservations[j];
-    if (a && a.is_all_day === true && a.start_time && a.end_time) {
+  // 2) 終日で「今日にかかる」
+  if (!active) {
+    for (var j = 0; j < (data.reservations || []).length; j++) {
+      var a = data.reservations[j];
+      if (!a || !a.is_all_day) continue;
       var sd = parseDateOnly(a.start_time);
       var ed = parseDateOnly(a.end_time);
-
-      // sd/ed が Date型で来る可能性も一応吸収
-      if (!sd && Object.prototype.toString.call(a.start_time) === '[object Date]') {
-        sd = startOfTodayLocal(a.start_time);
-      }
-      if (!ed && Object.prototype.toString.call(a.end_time) === '[object Date]') {
-        ed = startOfTodayLocal(a.end_time);
-      }
-
-      if (sd && ed) {
-        var sdTime = sd.getTime();
-        var edTime = ed.getTime();
-
-        // start <= today < end（end排他）
-        if (sdTime <= today0Time && today0Time < edTime) {
-          candidateAllDay = a;
-          break;
-        }
+      if (sd && ed && sd.getTime() <= today0 && today0 < ed.getTime()) {
+        active = a;
+        break;
       }
     }
   }
-}
 
-active = candidateTimed || candidateAllDay;
-
-
-  // ---- 表示 ----
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-  
-  function formatDateOnly(yyyy_mm_dd) {
-    // "2025-12-26" -> "2025-12-26"
-    // （ここではそのまま表示。好みで "2025/12/26" に変えてもOK）
-    return esc(yyyy_mm_dd);
-  }
-  
-  function formatDateTime(isoOrText) {
-    // "2025-12-22T14:30:00+09:00" のようなISOは Date で整形表示
-    // それ以外は文字列をそのまま出す
-    var s = String(isoOrText == null ? '' : isoOrText).trim();
-    if (!s) return '(不明)';
-  
-    // ISOっぽいなら Date にしてローカルで見やすく（ガラホでも崩れにくい）
-    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
-      var d = new Date(s);
-      if (!isNaN(d.getTime())) {
-        var y = d.getFullYear();
-        var m = ('0' + (d.getMonth() + 1)).slice(-2);
-        var dd = ('0' + d.getDate()).slice(-2);
-        var hh = ('0' + d.getHours()).slice(-2);
-        var mm = ('0' + d.getMinutes()).slice(-2);
-        return y + '-' + m + '-' + dd + ' ' + hh + ':' + mm;
-      }
-    }
-    return esc(s);
-  }
-  
+  /* ---------- 表示 ---------- */
   var viewHtml = '<div class="box">';
-  
+
   if (!active) {
     viewHtml += '<div class="warn">現在有効な予約はありません</div>';
   } else {
-    // 予約内容（raw title を優先）
+
+    /* ===== ここが今回の修正ポイント ===== */
+
+    // 表示用 start / end を作る
+    var dispStart = active.start_time;
+    var dispEnd   = active.end_time;
+
+    // 終日の場合だけ、end を表示用に −1 日
+    if (active.is_all_day === true && active.end_time) {
+      var m = String(active.end_time).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) {
+        var d = new Date(+m[1], +m[2] - 1, +m[3], 0, 0, 0, 0);
+        d.setDate(d.getDate() - 1);
+        var y = d.getFullYear();
+        var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+        var dd = ('0' + d.getDate()).slice(-2);
+        dispEnd = y + '-' + mm + '-' + dd;
+      }
+    }
+
+    /* ===== ここまで ===== */
+
+    // 予約内容
     var title = active.title_raw || '';
     if (!title) {
-      // title_raw が空のときだけ job_code / job_name で補う
       var jc = active.job_code || '';
       var jn = active.job_name || '';
-      title = (jc && jn) ? (jc + '｜' + jn) : (jc || jn || '');
+      title = jc && jn ? jc + '｜' + jn : (jc || jn);
     }
-  
-    viewHtml += '<div><span class="label">予約内容：</span>' + esc(title || '（不明）') + '</div>';
-  
-    // 業務コード／業務名（必要なら残す）
-    viewHtml += '<div><span class="label">業務コード：</span>' + esc(active.job_code || '不明') + '</div>';
-    viewHtml += '<div><span class="label">業務名：</span>' + esc(active.job_name || '不明') + '</div>';
-  
-    // 開始・終了
-    if (active.is_all_day === true) {
-      viewHtml += '<div><span class="label">区分：</span>終日</div>';
-      viewHtml += '<div><span class="label">開始日：</span>' + formatDateOnly(active.start_time || '(不明)') + '</div>';
-      viewHtml += '<div><span class="label">終了日：</span>' + formatDateOnly(active.end_time || '(不明)') + '</div>';
-    } else {
-      viewHtml += '<div><span class="label">開始：</span>' + formatDateTime(active.start_time) + '</div>';
-      viewHtml += '<div><span class="label">終了：</span>' + formatDateTime(active.end_time) + '</div>';
+
+    viewHtml += '<div><span class="label">予約内容：</span>' + title + '</div>';
+    viewHtml += '<div><span class="label">開始日：</span>' + dispStart + '</div>';
+    viewHtml += '<div><span class="label">終了日：</span>' + dispEnd + '</div>';
+
+    if (active.location) {
+      viewHtml += '<div><span class="label">場所：</span>' + active.location + '</div>';
     }
-  
-    viewHtml += '<div><span class="label">場所：</span>' + esc(active.location || '') + '</div>';
-  
-    // ★ 状態（usage_state）は表示しない（要求どおり削除）
   }
-  
+
   viewHtml += '</div>';
 
-  // ---- 反映 ----
   content.innerHTML = debugHtml + viewHtml;
 }
 
@@ -195,8 +136,7 @@ active = candidateTimed || candidateAllDay;
     return;
   }
 
-  var GAS_URL =
-    'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
+  var GAS_URL = '（あなたのGASのURL）';
 
   var script = document.createElement('script');
   script.src =
