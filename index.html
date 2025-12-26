@@ -143,46 +143,40 @@ function buildDebugHtml(obj) {
 }
 
 window.onload = function () {
-  var content = document.getElementById('content');
   var calendarId = getParam('calendar_id');
+  var content = document.getElementById('content');
 
   if (!calendarId) {
     content.innerHTML = '<div class="warn">calendar_id がありません。</div>';
     return;
   }
 
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', WEBAPP_URL + '?calendar_id=' + encodeURIComponent(calendarId), true);
-  xhr.onreadystatechange = function () {
-    if (xhr.readyState !== 4) return;
+  var script = document.createElement('script');
+  script.src =
+    WEBAPP_URL
+    + '?calendar_id=' + encodeURIComponent(calendarId)
+    + '&callback=handleReservation';
 
-    // ===== デバッグ優先：まず生レスポンスを表示 =====
-    if (getParam('debug') === '1') {
-      content.innerHTML =
-        '<div class="box">'
-        + '<div class="job-code">DEBUG：raw response</div>'
-        + '<pre style="white-space:pre-wrap;font-size:12px;">'
-        + xhr.responseText
-        + '</pre>'
-        + '</div>';
-      return;
-    }
-
-
-    var reservation = pickCurrentReservation(data.reservations || []);
-    var disp = formatReservationForDisplay(reservation);
-
-    content.innerHTML =
-      '<div class="box">'
-      + '<div class="job-code">' + (reservation && reservation.job_code || '(不明)') + '</div>'
-      + '<div class="job-name">' + (reservation && reservation.job_name || '') + '</div>'
-      + '<div class="time">開始：' + (disp ? disp.startText : '(不明)') + '</div>'
-      + '<div class="time">終了：' + (disp ? disp.endText : '(不明)') + '</div>'
-      + '</div>'
-      + buildDebugHtml(data);
-  };
-  xhr.send(null);
+  document.body.appendChild(script);
 };
+
+// ===== JSONP callback =====
+function handleReservation(data) {
+  var content = document.getElementById('content');
+
+  var reservation = pickCurrentReservation(data.reservations || []);
+  var disp = formatReservationForDisplay(reservation);
+
+  content.innerHTML =
+    '<div class="box">'
+    + '<div class="job-code">' + (reservation && reservation.job_code || '(不明)') + '</div>'
+    + '<div class="job-name">' + (reservation && reservation.job_name || '') + '</div>'
+    + '<div class="time">開始：' + (disp ? disp.startText : '(不明)') + '</div>'
+    + '<div class="time">終了：' + (disp ? disp.endText : '(不明)') + '</div>'
+    + '<div class="muted">状態：' + data.usage_state + '</div>'
+    + '</div>';
+}
+  
 </script>
 
 </body>
