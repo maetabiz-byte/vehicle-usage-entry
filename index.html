@@ -1,93 +1,310 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>社用車 利用</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: sans-serif; margin: 16px; }
-    h1 { font-size: 20px; }
-    .box { border: 1px solid #ccc; padding: 12px; margin-bottom: 12px; }
-    .error { color: red; font-weight: bold; }
-    .debug { background: #f7f7f7; white-space: pre-wrap; font-family: monospace; }
-    button { width: 100%; padding: 12px; font-size: 16px; }
+    body { font-family: sans-serif; margin: 16px; color: #000; }
+    h1 { font-size: 22px; margin-bottom: 12px; }
+    .box { border: 1px solid #ccc; padding: 12px; margin-bottom: 16px; }
+    .warn { color: #b00000; font-weight: bold; margin-bottom: 12px; }
+    .muted { color: #555; font-size: 13px; }
+    .row { margin: 4px 0; }
+    .label { font-weight: bold; }
+    pre { white-space: pre-wrap; word-break: break-all; }
+    .actions { margin-top: 16px; display: grid; gap: 10px; }
+    button { font-size: 16px; padding: 10px 12px; }
   </style>
 </head>
 <body>
 
-<h1>社用車 利用</h1>
+  <h1>社用車 利用</h1>
 
-<div id="debug" class="box debug">DEBUG: 初期状態</div>
-<div id="result" class="box">予約取得中…</div>
+  <div id="content"></div>
 
-<script>
-/* ===== 設定 ===== */
-const GAS_URL =
-  "https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec";
+  <script>
+    // === 設定 ===
+    // ※あなたのGAS WebApp URL（/exec）をそのまま使用
+    var WEBAPP_URL =
+      'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
 
-/* ===== util ===== */
-function getCalendarId() {
-  return new URLSearchParams(location.search).get("calendar_id");
-}
+    // JSONP callback 名（GAS側 doGet が callback パラメータに対応している前提）
+    var CALLBACK_NAME = 'handleReservation';
 
-/* ===== JSONP 呼び出し ===== */
-(function boot() {
-  const calendarId = getCalendarId();
-  if (!calendarId) {
-    document.getElementById("result").innerHTML =
-      '<div class="error">calendar_id がありません</div>';
-    return;
-  }
+    function getParam(name) {
+      var query = window.location.search;
+      if (!query) return null;
+      if (query.charAt(0) === '?') query = query.substring(1);
 
-  const old = document.getElementById("jsonp-script");
-  if (old) old.remove();
+      var vars = query.split('&');
+      for (var i = 0; i < vars.length; i++) {
+        var pair = vars[i].split('=');
+        var key = decodeURIComponent(pair[0] || '');
+        if (key === name) {
+          return decodeURIComponent(pair[1] || '');
+        }
+      }
+      return null;
+    }
 
-  const s = document.createElement("script");
-  s.id = "jsonp-script";
-  s.src =
-    GAS_URL +
-    "?calendar_id=" + encodeURIComponent(calendarId) +
-    "&callback=handleReservation";
+    function zeroPad2(n) {
+      n = String(n);
+      return (n.length === 1) ? ('0' + n) : n;
+    }
 
-  document.body.appendChild(s);
-})();
+    function ymd(d) {
+      var y = d.getFullYear();
+      var m = zeroPad2(d.getMonth() + 1);
+      var day = zeroPad2(d.getDate());
+      return y + '-' + m + '-' + day;
+    }
 
-/* ===== GAS から呼ばれる ===== */
-function handleReservation(data) {
-  document.getElementById("debug").textContent =
-    "DEBUG: JSONP受信成功\n\n" + JSON.stringify(data, null, 2);
+    function hm(d) {
+      var h = zeroPad2(d.getHours());
+      var m = zeroPad2(d.getMinutes());
+      return h + ':' + m;
+    }
 
-  if (!data || !data.reservations || data.reservations.length === 0) {
-    document.getElementById("result").innerHTML =
-      '<div class="error">予約がありません</div>';
-    return;
-  }
+    // ISO/Date文字列を Date に変換（失敗したら null）
+    // - "YYYY-MM-DD" → ローカル日付として扱う（終日向け）
+    // - TZ無しの日時 → +09:00 を補う（ガラホ救済）
+    function toDate(v) {
+      if (!v) return null;
 
-  const r = data.reservations[0];
+      if (Object.prototype.toString.call(v) === '[object Date]') {
+        return isNaN(v.getTime()) ? null : v;
+      }
 
-  let html = "";
-  html += "<div><b>予約内容：</b>" + (r.title_raw || "") + "</div>";
-  html += "<div><b>業務コード：</b>" + (r.job_code || "") + "</div>";
-  html += "<div><b>業務名：</b>" + (r.job_name || "") + "</div>";
-  html += "<div><b>開始：</b>" + (r.start_time || "") + "</div>";
-  html += "<div><b>終了：</b>" + (r.end_time || "") + "</div>";
-  if (r.location) {
-    html += "<div><b>場所：</b>" + r.location + "</div>";
-  }
+      var s = String(v);
 
-  html += '<div style="margin-top:12px;">';
-  html += '<button onclick="goStart()">開始入力へ</button>';
-  html += '</div>';
+      // 日付だけ（終日）
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        // "YYYY-MM-DDT00:00:00+09:00"
+        s = s + 'T00:00:00+09:00';
+        var d0 = new Date(s);
+        return isNaN(d0.getTime()) ? null : d0;
+      }
 
-  document.getElementById("result").innerHTML = html;
-}
+      // "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SS"
+      if (s.indexOf('T') === -1 && s.indexOf(' ') !== -1) {
+        s = s.replace(' ', 'T');
+      }
 
-function goStart() {
-  const calendarId = getCalendarId();
-  if (!calendarId) return;
-  location.href = "start.html?calendar_id=" + encodeURIComponent(calendarId);
-}
-</script>
+      // TZが無いなら +09:00 を付与
+      if (s.indexOf('Z') === -1 && !/[+\-]\d\d:\d\d$/.test(s)) {
+        s = s + '+09:00';
+      }
+
+      var d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // 終日イベントの end は排他（翌日0:00）なので、表示用に end-1日
+    function endMinusOneDayForAllDay(endD) {
+      var x = new Date(endD.getTime());
+      x.setDate(x.getDate() - 1);
+      return x;
+    }
+
+    // 「今」有効な予約を選ぶ（終日は end 排他を考慮）
+    function pickCurrentReservation(reservations) {
+      if (!reservations || !reservations.length) return null;
+
+      var now = new Date();
+
+      for (var i = 0; i < reservations.length; i++) {
+        var r = reservations[i];
+
+        var startRaw = r.start_time || r.start || r.startTime || null;
+        var endRaw   = r.end_time   || r.end   || r.endTime   || null;
+
+        var start = toDate(startRaw);
+        var end   = toDate(endRaw);
+
+        if (!start || !end) continue;
+
+        var isAllDay = (r.is_all_day === true || r.is_all_day === 'TRUE' || r.is_all_day === 'true');
+
+        if (isAllDay) {
+          // end排他 → 比較用に end-1日(23:59:59扱いに近い)
+          // ただし「日付単位」で包含するなら start <= now <= endMinus1 の形が一番素直
+          var endMinus1 = endMinusOneDayForAllDay(end);
+          // endMinus1 の「日付」いっぱいまで有効とみなす
+          endMinus1.setHours(23, 59, 59, 999);
+          end = endMinus1;
+        }
+
+        if (start <= now && now <= end) return r;
+      }
+
+      return null;
+    }
+
+    function renderReservation(reservation) {
+      var content = document.getElementById('content');
+
+      if (!reservation) {
+        content.innerHTML =
+          '<div class="box"><div class="warn">現在有効な予約はありません</div></div>';
+        return;
+      }
+
+      var titleRaw = reservation.title_raw || reservation.event_title_raw || '';
+      var jobCode  = reservation.job_code || reservation.parsed_job_code || '';
+      var jobName  = reservation.job_name || reservation.parsed_job_name || '';
+
+      var location = reservation.location || reservation.event_location || '';
+
+      var startRaw = reservation.start_time || reservation.start || reservation.startTime || null;
+      var endRaw   = reservation.end_time   || reservation.end   || reservation.endTime   || null;
+
+      var isAllDay = (reservation.is_all_day === true || reservation.is_all_day === 'TRUE' || reservation.is_all_day === 'true');
+
+      var startD = toDate(startRaw);
+      var endD   = toDate(endRaw);
+
+      var startText = '(不明)';
+      var endText   = '(不明)';
+
+      if (startD && endD) {
+        if (isAllDay) {
+          var endMinus1 = endMinusOneDayForAllDay(endD);
+          startText = ymd(startD);
+          endText   = ymd(endMinus1);
+        } else {
+          startText = ymd(startD) + ' ' + hm(startD);
+          endText   = ymd(endD)   + ' ' + hm(endD);
+        }
+      }
+
+      // 「予約内容」は title_raw をそのまま出す（解析結果は job_code/job_name で補助）
+      var html = '';
+      html += '<div class="box">';
+      html += '  <div class="row"><span class="label">予約内容：</span>' + escapeHtml(titleRaw || (jobCode + ' ' + jobName)) + '</div>';
+      if (jobCode) html += '  <div class="row"><span class="label">業務コード：</span>' + escapeHtml(jobCode) + '</div>';
+      if (jobName) html += '  <div class="row"><span class="label">業務名：</span>' + escapeHtml(jobName) + '</div>';
+      html += '  <div class="row"><span class="label">開始：</span>' + escapeHtml(startText) + '</div>';
+      html += '  <div class="row"><span class="label">終了：</span>' + escapeHtml(endText) + '</div>';
+      if (location) html += '  <div class="row"><span class="label">場所：</span>' + escapeHtml(location) + '</div>';
+      html += '</div>';
+
+      // start.html への導線（calendar_id は引き回す）
+      var calendarId = getParam('calendar_id') || '';
+      html += '<div class="actions">';
+      html += '  <button type="button" onclick="goStart()">開始入力へ</button>';
+      html += '</div>';
+
+      content.innerHTML = html;
+
+      window.goStart = function () {
+        if (!calendarId) {
+          alert('calendar_id がありません');
+          return;
+        }
+        window.location.href = 'start.html?calendar_id=' + encodeURIComponent(calendarId);
+      };
+    }
+
+    function renderDebug(data) {
+      var content = document.getElementById('content');
+      var html = '';
+      html += '<div class="box">';
+      html += '  <div class="row"><span class="label">DEBUG：JSONP受信成功</span></div>';
+      html += '  <pre>' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+      html += '</div>';
+      content.innerHTML = html + content.innerHTML;
+    }
+
+    function escapeHtml(s) {
+      s = (s === null || s === undefined) ? '' : String(s);
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // === JSONP 受信（CORS回避の本命） ===
+    // GAS doGet は callback を受け、 callback(JSON) を返す前提
+    function loadJsonp(calendarId) {
+      var url = WEBAPP_URL
+        + '?calendar_id=' + encodeURIComponent(calendarId)
+        + '&callback=' + encodeURIComponent(CALLBACK_NAME);
+
+      // 同一ページで再読込したとき、古いscriptが残っていると混乱するので毎回作り直す
+      var old = document.getElementById('jsonpScript');
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+
+      var s = document.createElement('script');
+      s.id = 'jsonpScript';
+      s.src = url;
+      s.async = true;
+
+      s.onerror = function () {
+        var content = document.getElementById('content');
+        content.innerHTML =
+          '<div class="box"><div class="warn">予約取得に失敗（JSONP読み込みエラー）</div></div>';
+      };
+
+      document.body.appendChild(s);
+    }
+
+    // === JSONP callback（GAS側から呼ばれる） ===
+    // 例：handleReservation({ reservations: [...], usage_state: "...", ... });
+    window.handleReservation = function (data) {
+      var debug = (getParam('debug') === '1');
+
+      // 先に「最低限」エラーハンドリング
+      if (!data || data.error) {
+        var content = document.getElementById('content');
+        var msg = (data && data.error) ? String(data.error) : 'unknown error';
+        content.innerHTML =
+          '<div class="box"><div class="warn">予約取得エラー：' + escapeHtml(msg) + '</div></div>';
+        if (debug) renderDebug(data);
+        return;
+      }
+
+      // debug 表示
+      if (debug) renderDebug(data);
+
+      // 予約群から「今」有効なものを選ぶ
+      var reservations = data.reservations || [];
+      var current = pickCurrentReservation(reservations);
+
+      renderReservation(current);
+    };
+
+    // === 起動 ===
+    (function boot() {
+      var calendarId = getParam('calendar_id');
+      var content = document.getElementById('content');
+
+      if (!calendarId) {
+        content.innerHTML =
+          '<div class="box"><div class="warn">calendar_id がありません（QRコードのURLを確認してください）</div></div>';
+        return;
+      }
+
+      // まず画面を成立させる（外部依存が死んでもUIを殺さない）
+      content.innerHTML =
+        '<div class="box"><div class="muted">予約を取得しています...</div></div>';
+
+      loadJsonp(calendarId);
+
+      // 念のためタイムアウトも用意（無反応対策）
+      setTimeout(function () {
+        // 既に表示が進んでいれば何もしない
+        // まだ「取得しています...」のままなら、警告を出す
+        var html = (document.getElementById('content').innerHTML || '');
+        if (html.indexOf('予約を取得しています') !== -1) {
+          document.getElementById('content').innerHTML =
+            '<div class="box"><div class="warn">予約取得がタイムアウトしました（応答なし）</div></div>';
+        }
+      }, 8000);
+    })();
+  </script>
 
 </body>
 </html>
