@@ -1,182 +1,64 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>社用車 利用</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: sans-serif; margin: 16px; color: #000; }
+    body { font-family: sans-serif; margin: 16px; }
     h1 { font-size: 22px; margin-bottom: 12px; }
-    .box { border: 1px solid #ccc; padding: 12px; margin-bottom: 20px; }
-    .job-code { font-weight: bold; margin-bottom: 4px; }
-    .job-name { margin-bottom: 12px; }
-    .time { margin-bottom: 4px; }
-    .location { margin-top: 8px; font-size: 14px; }
-    .actions { margin-top: 24px; display: grid; gap: 10px; }
-    button { font-size: 16px; padding: 10px 12px; }
-    .warn { color: #b00000; font-weight: bold; margin-bottom: 12px; }
-    .muted { color: #555; font-size: 13px; }
+    .box { border: 1px solid #ccc; padding: 12px; }
+    .job-code { font-weight: bold; }
+    .time { margin-top: 6px; }
+    .warn { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
 
 <h1>社用車 利用</h1>
-
 <div id="content"></div>
 
 <script>
-var WEBAPP_URL =
-  'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
+/* ===============================
+   JSONP callback（必須）
+   =============================== */
+function handleReservation(data) {
+  var content = document.getElementById('content');
 
-function getParam(name) {
-  var query = window.location.search;
-  if (!query) return null;
-  if (query.charAt(0) === '?') query = query.substring(1);
-
-  var vars = query.split('&');
-  for (var i = 0; i < vars.length; i++) {
-    var pair = vars[i].split('=');
-    var key = decodeURIComponent(pair[0] || '');
-    if (key === name) {
-      return decodeURIComponent(pair[1] || '');
-    }
-  }
-  return null;
+  // データ確認用（まずは必ず見えることを優先）
+  content.innerHTML =
+    '<div class="box">'
+    + '<div class="job-code">DEBUG: JSONP受信成功</div>'
+    + '<pre style="white-space:pre-wrap;font-size:12px;">'
+    + JSON.stringify(data, null, 2)
+    + '</pre>'
+    + '</div>';
 }
 
-function zeroPad2(n) {
-  n = String(n);
-  return (n.length === 1) ? ('0' + n) : n;
-}
-
-function md(d) {
-  return zeroPad2(d.getMonth() + 1) + '/' + zeroPad2(d.getDate());
-}
-
-function hm(d) {
-  return zeroPad2(d.getHours()) + ':' + zeroPad2(d.getMinutes());
-}
-
-/* ===== Date変換（★ここが本修正） ===== */
-function toDate(v) {
-  if (!v) return null;
-
-  if (Object.prototype.toString.call(v) === '[object Date]') {
-    return isNaN(v.getTime()) ? null : v;
-  }
-
-  var s = String(v);
-
-  // ★ 終日（YYYY-MM-DD）対策：時刻を明示
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    s = s + 'T00:00:00';
-  }
-
-  if (s.indexOf('T') === -1 && s.indexOf(' ') !== -1) {
-    s = s.replace(' ', 'T');
-  }
-
-  if (s.indexOf('Z') === -1 && !/[+\-]\d\d:\d\d$/.test(s)) {
-    s = s + '+09:00';
-  }
-
-  var d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function pickCurrentReservation(reservations) {
-  if (!reservations || !reservations.length) return null;
-
-  var now = new Date();
-
-  for (var i = 0; i < reservations.length; i++) {
-    var r = reservations[i];
-
-    var start = toDate(r.start_time);
-    var end   = toDate(r.end_time);
-    if (!start || !end) continue;
-
-    if (r.is_all_day === true || r.is_all_day === 'TRUE') {
-      var endMinus1 = new Date(end.getTime());
-      endMinus1.setDate(endMinus1.getDate() - 1);
-      end = endMinus1;
-    }
-
-    if (start <= now && now <= end) {
-      return r;
-    }
-  }
-  return null;
-}
-
-function formatReservationForDisplay(r) {
-  if (!r) return null;
-
-  var startD = toDate(r.start_time);
-  var endD   = toDate(r.end_time);
-
-  if (!startD || !endD) {
-    return { startText: '(不明)', endText: '(不明)' };
-  }
-
-  if (r.is_all_day === true || r.is_all_day === 'TRUE') {
-    var endMinus1 = new Date(endD.getTime());
-    endMinus1.setDate(endMinus1.getDate() - 1);
-    return {
-      startText: md(startD) + '（終日）',
-      endText: md(endMinus1) + '（終日）'
-    };
-  }
-
-  return {
-    startText: md(startD) + ' ' + hm(startD),
-    endText: md(endD) + ' ' + hm(endD)
-  };
-}
-
-/* ===== DEBUG（?debug=1 のときだけ表示） ===== */
-function buildDebugHtml(obj) {
-  if (getParam('debug') !== '1') return '';
-  return '<pre style="font-size:12px;white-space:pre-wrap;border:1px solid #ccc;padding:8px;">'
-    + JSON.stringify(obj, null, 2)
-    + '</pre>';
-}
-
-window.onload = function () {
-  var calendarId = getParam('calendar_id');
+/* ===============================
+   JSONP 読み込み（XHR禁止）
+   =============================== */
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var calendarId = params.get('calendar_id');
   var content = document.getElementById('content');
 
   if (!calendarId) {
-    content.innerHTML = '<div class="warn">calendar_id がありません。</div>';
+    content.innerHTML = '<div class="warn">calendar_id がありません</div>';
     return;
   }
 
+  var GAS_URL =
+    'https://script.google.com/macros/s/AKfycbx1IiU6G463iRqi1MQq1EkhEcnJlZra-8ywfQO7WBwX3O2DcsffNIcDc4K0OZZDLGTt/exec';
+
   var script = document.createElement('script');
   script.src =
-    WEBAPP_URL
+    GAS_URL
     + '?calendar_id=' + encodeURIComponent(calendarId)
     + '&callback=handleReservation';
 
   document.body.appendChild(script);
-};
-
-// ===== JSONP callback =====
-function handleReservation(data) {
-  var content = document.getElementById('content');
-
-  var reservation = pickCurrentReservation(data.reservations || []);
-  var disp = formatReservationForDisplay(reservation);
-
-  content.innerHTML =
-    '<div class="box">'
-    + '<div class="job-code">' + (reservation && reservation.job_code || '(不明)') + '</div>'
-    + '<div class="job-name">' + (reservation && reservation.job_name || '') + '</div>'
-    + '<div class="time">開始：' + (disp ? disp.startText : '(不明)') + '</div>'
-    + '<div class="time">終了：' + (disp ? disp.endText : '(不明)') + '</div>'
-    + '<div class="muted">状態：' + data.usage_state + '</div>'
-    + '</div>';
-}
-  
+})();
 </script>
 
 </body>
