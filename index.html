@@ -156,13 +156,18 @@ window.onload = function () {
   xhr.onreadystatechange = function () {
     if (xhr.readyState !== 4) return;
 
-    var data;
-    try {
-      data = JSON.parse(xhr.responseText);
-    } catch (e) {
-      content.innerHTML = '<div class="warn">レスポンス解析失敗</div>';
+    // ===== デバッグ優先：まず生レスポンスを表示 =====
+    if (getParam('debug') === '1') {
+      content.innerHTML =
+        '<div class="box">'
+        + '<div class="job-code">DEBUG：raw response</div>'
+        + '<pre style="white-space:pre-wrap;font-size:12px;">'
+        + xhr.responseText
+        + '</pre>'
+        + '</div>';
       return;
     }
+
 
     var reservation = pickCurrentReservation(data.reservations || []);
     var disp = formatReservationForDisplay(reservation);
